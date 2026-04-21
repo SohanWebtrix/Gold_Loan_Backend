@@ -421,6 +421,21 @@ export class ClientRepository {
             Sentry.captureException(error);
 
             console.error("Client update error is", error)
+                if (error.code === "ER_DUP_ENTRY") {
+
+                const msg = error.sqlMessage;
+
+                if (msg?.includes("u_aadhar")) {
+                    throw new ConflictException("Adhar Card already exists");
+                }
+
+                if (msg?.includes("u_pan")) {
+                    throw new ConflictException("Pan Card Already Exists");
+                }
+
+                throw new ConflictException("Duplicate value detected");
+            }
+            
             throw error;
         }
 
@@ -552,6 +567,8 @@ export class ClientRepository {
       FROM clients cl
       LEFT JOIN customers a ON cl.created_by = a.customer_id
       LEFT JOIN customers a2 ON cl.modified_by = a2.customer_id
+       LEFT JOIN ab_cities ct ON cl.city = ct.city_id
+      LEFT JOIN ab_states st ON cl.state = st.state_id
       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
     `;
 
