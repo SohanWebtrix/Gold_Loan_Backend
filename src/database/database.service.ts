@@ -15,6 +15,7 @@ export class DatabaseService implements OnModuleDestroy {
             user: this.config.get<string>('DB_USER'),
             password: this.config.get<string>('DB_PASSWORD'),
             database: this.config.get<string>('DB_NAME'),
+            port: parseInt(this.config.get<string>('DB_PORT') ?? '3306'),
 
             waitForConnections: true,
             connectionLimit: 20, // 🔥 important
