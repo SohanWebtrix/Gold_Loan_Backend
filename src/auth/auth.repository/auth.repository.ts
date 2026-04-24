@@ -6,6 +6,7 @@ import { AuthDto } from "../auth.dto";
 import { ConflictException, Injectable, InternalServerErrorException } from "@nestjs/common";
 import * as bcrypt from 'bcrypt';
 import { ResultSetHeader } from "mysql2";
+import { DateTime } from "luxon";
 
 type Customer = {
     customer_id: number;
@@ -28,13 +29,13 @@ type OtpRecord = {
 };
 
 export type LoginUserType = {
-  customer_id: number;
-  comp_id:number;
-  cust_phone:number;
-  cust_email: string;
-  cust_name: string;
-  cust_password: string;
-  status: string; // or 'active' | 'inactive' if you know values
+    customer_id: number;
+    comp_id: number;
+    cust_phone: number;
+    cust_email: string;
+    cust_name: string;
+    cust_password: string;
+    status: string; // or 'active' | 'inactive' if you know values
 };
 
 
@@ -45,62 +46,21 @@ export class AuthRepository {
     constructor(private readonly db: DatabaseService) { }
 
 
-    async insertUser(data: AuthDto) {
+    private formatDateForDB(date: any): string | null {
+        if (!date) return null;
 
-        try {
-            const { cust_name, username, cust_email, cust_password } = data;
-
-            // 🔐 Hash password
-            const hashedPassword = cust_password ? await bcrypt.hash(cust_password, 10) : null;
-
-   
-
-            const result = await this.db.query<ResultSetHeader>(
-                `
-     INSERT INTO customers
-    (
-      cust_name,
-      user_name,
-      cust_email,
-      cust_password
-    )
-    VALUES (?, ?, ?, ?)
-    `,
-                [
-                    cust_name ?? null,
-                    username ?? null,
-                    cust_email ?? null,
-                    hashedPassword ?? null,
-                ],
-            );
-
-            return result;
-
-        }
-        catch (error) {
-            // Sentry.captureException(error);
-
-            console.error("Create user  error is", error)
-            if (error.code === "ER_DUP_ENTRY") {
-
-                const msg = error.sqlMessage;
-
-                if (msg.includes("unique_email")) {
-                    throw new ConflictException("Email ID already exists");
-                }
-
-
-                throw new ConflictException("Duplicate value detected");
-            }
-
-
-            throw new InternalServerErrorException(
-                "Failed to create beneficiary"
-            );
-        }
+        return (typeof date === 'string'
+            ? DateTime.fromISO(date)
+            : DateTime.fromJSDate(date)
+        )
+            .toUTC()
+            .toFormat("yyyy-MM-dd HH:mm:ss");
     }
 
-      async insertAdmin(data: any) {
+
+    // REPOSITORY
+
+    async insertAdmin(data: any) {
 
         try {
             const { admin_name, username, admin_email, admin_password } = data;
@@ -108,7 +68,7 @@ export class AuthRepository {
             // 🔐 Hash password
             const hashedPassword = admin_password ? await bcrypt.hash(admin_password, 10) : null;
 
-   
+
 
             const result = await this.db.query<ResultSetHeader>(
                 `
@@ -155,6 +115,108 @@ export class AuthRepository {
         }
     }
 
+    // Insert Company (Manual Query)
+    async insertCompany(data: any, userId: number) {
+        try {
+            const company_email = data.company_email || null;
+            const company_mobile = data.company_mobile || null;
+            const company_name = data.company_name || null;
+
+
+            const created_date = DateTime.now()
+                .toUTC()
+                .toFormat("yyyy-MM-dd HH:mm:ss");
+
+            const result = await this.db.query(
+                `
+            INSERT INTO company
+            (
+                company_name,
+                company_email,
+                company_mobile,
+                created_by,
+                created_date
+            )
+            VALUES (?,?, ?, ?, ?)
+            `,
+                [
+                    company_name,
+                    company_email,
+                    company_mobile,
+                    userId,
+                    created_date
+                ]
+            );
+
+            return result;
+        } catch (error) {
+            console.error("insertCompany error", error);
+            throw error;
+        }
+    }
+
+
+    // Insert Customer (Manual Query)
+    async insertCustomer(
+        data: any,
+        userId: number,
+        company_id: number
+    ) {
+        try {
+            const cust_password = data.cust_password
+                ? await bcrypt.hash(data.cust_password, 10)
+                : null;
+
+            const created_date = DateTime.now()
+                .toUTC()
+                .toFormat("yyyy-MM-dd HH:mm:ss");
+
+            const result = await this.db.query(
+                `
+            INSERT INTO customers
+            (
+                comp_id,
+                first_name,
+                last_name,
+                status,
+                address_line1,
+                address_line2,
+                state,
+                city,
+                pincode,
+                cust_password,
+                cust_phone,
+                created_by,
+                created_date
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `,
+                [
+                    company_id,
+                    data.first_name || null,
+                    data.last_name || null,
+                    data.status || 1,
+                    data.address_line1 || null,
+                    data.address_line2 || null,
+                    data.state || null,
+                    data.city || null,
+                    data.pincode || null,
+                    cust_password,
+                    data.cust_phone || null,
+                    userId,
+                    created_date
+                ]
+            );
+
+            return result;
+        } catch (error) {
+            console.error("insertCustomer error", error);
+            throw error;
+        }
+    }
+
+
+
     async isTokenBlacklisted(token: string): Promise<boolean> {
 
         if (!token) {
@@ -172,7 +234,7 @@ export class AuthRepository {
         return Array.isArray(rows) && rows.length > 0;
     }
 
-    async loginemail(login_id: string): Promise<LoginUserType |null> {
+    async loginemail(login_id: string): Promise<LoginUserType | null> {
 
         const rows = await this.db.query<LoginUserType[]>(
             `
@@ -188,7 +250,7 @@ export class AuthRepository {
     }
 
 
-      async loginemailadmin(login_id: string) {
+    async loginemailadmin(login_id: string) {
 
         const rows = await this.db.query<ResultSetHeader>(
             `

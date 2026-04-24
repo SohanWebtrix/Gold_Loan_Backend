@@ -14,7 +14,6 @@ export class ClientController {
     @Get('get_client/:id')
     async getClient(
         @Param('id', ParseIntPipe) id: number) {
-
         return this.clientService.getClinetById(id)
     }
 
@@ -42,10 +41,13 @@ export class ClientController {
         return this.clientService.getAllStates()
     }
 
-    @Get('search_cities')
-    async searchCities(@Query('search') search?: string) {
-        return this.clientService.searchCities(search)
-    }
+@Get('search_cities')
+async searchCities(
+  @Query('search') search?: string,
+  @Query('stateId') stateId?: string,
+) {
+  return this.clientService.searchCities(search, Number(stateId));
+}
 
     @Get('get_cities/:state_id')
     async getAllStates(
@@ -182,5 +184,15 @@ export class ClientController {
             Number(limit), userid);
     }
 
+        @Post("search_client_loan")
+    @UseGuards(AuthGuard('jwt'))
+    async searchByName(@Query("search") search: string, @Req() req: any, @Headers('comp-id') companyId: string,
+
+    ) {
+        const userid = req.user.userId;
+        const companyIdNum = Number(companyId);
+    
+        return this.clientService.searchClientloan(search, companyIdNum);
+    }
 
 }

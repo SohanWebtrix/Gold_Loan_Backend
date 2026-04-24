@@ -1,4 +1,5 @@
 /* eslint-disable prettier/prettier */
+
 import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ClientRepository } from './client.repository/client.repository';
 import { UpdateClientDto } from './client.updatedto';
@@ -65,7 +66,6 @@ export class ClientService {
       }
     } catch (error) {
       console.error("Search Client error", error)
-
       throw new InternalServerErrorException("Failed to get updated data",);
     }
   }
@@ -90,12 +90,12 @@ export class ClientService {
       const data = await this.clientRepo.getUsersByid(userId);
 
       return {
-        message: "data fetched succesfully"
+        message: "client fetched succesfully"
         , data
       }
     }
     catch (error) {
-      console.error("get user by id error is", error)
+      console.error("fail to fetch client", error)
     }
   }
 
@@ -110,7 +110,7 @@ export class ClientService {
       const data = await this.clientRepo.getUsersByidLoans(userId);
 
       return {
-        message: "data fetched succesfully"
+        message: "client loan fetched succesfully"
         , data
       }
     }
@@ -126,12 +126,12 @@ export class ClientService {
       const data = await this.clientRepo.getallclients(userid);
 
       return {
-        message: "data fetched succesfully"
+        message: "all clients fetched succesfully"
         , data
       }
     }
     catch (error) {
-      console.error("get users error is", error)
+      console.error("failed to fetch all clients", error)
     }
   }
 
@@ -147,12 +147,13 @@ export class ClientService {
     }
   }
 
-  async searchCities(search?: string) {
+  async searchCities(search?: string, stateId?:number) {
     try {
-      const data = await this.clientRepo.searchCities(search);
+
+      const data = await this.clientRepo.searchCities(search,stateId);
+
       return {
         success: true,
-
         message: "cities fetched succesfully",
         data,
       };
@@ -169,12 +170,12 @@ export class ClientService {
 
       const data = await this.clientRepo.getCityById(stateId);
       return {
-        success:true,
+        success: true,
         message: "Cities fetched succesfully",
         data,
       };
     } catch (error) {
-      console.error("get city by id error is", error);
+      console.error("failed to get cities", error);
     }
   }
 
@@ -186,7 +187,7 @@ export class ClientService {
         data,
       };
     } catch (error) {
-      console.error("get states error is", error);
+      console.error("failed to fetch states", error);
     }
   }
 
@@ -475,7 +476,7 @@ export class ClientService {
       };
 
     } catch (error) {
-      console.error("updateBeneficiary error", error);
+      console.error("updateClient error", error);
 
       // ✅ DB failed — delete newly uploaded files only
       await Promise.all(
@@ -589,4 +590,30 @@ export class ClientService {
     }
   }
 
+  async searchClientloan(search: string, comapanyid: number) {
+
+    try {
+
+      const data = await this.clientRepo.getSearchClients(search, comapanyid);
+
+
+
+      if (!data || data.length === 0) {
+        return {
+          message: "no Client found",
+          data: [],
+        }
+      }
+
+      return {
+        success: true,
+        message: "Client fetched succesfully",
+        data
+      }
+    } catch (error) {
+      console.error("Search Client error", error)
+
+      throw new InternalServerErrorException("Failed to get updated data",);
+    }
+  }
 }

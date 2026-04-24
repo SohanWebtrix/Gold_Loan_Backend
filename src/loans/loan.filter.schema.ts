@@ -19,7 +19,7 @@ export const LOAN_FILTER_SCHEMA = {
     loan_start_date: {
         column: 'lo.loan_start_date',
         type: 'date',
-        operators: ['equals', 'before', 'after'],
+        operators: ['equals', 'before', 'after', 'between'],
     },
 
     loan_document_number: {

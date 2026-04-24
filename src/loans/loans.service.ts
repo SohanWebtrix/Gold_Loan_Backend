@@ -63,7 +63,7 @@ export class LoansService {
         data
       }
     } catch (error) {
-      console.error("Search Client error", error)
+      console.error("Search loans error", error)
 
       throw new InternalServerErrorException("Failed to get updated data",);
     }
@@ -203,7 +203,6 @@ export class LoansService {
         await this.loanRepo.getLoanById(
           loanId
         );
-
 
       console.log("loan is", loan)
       console.log("loan client id is", loan.client_id)
@@ -669,7 +668,7 @@ export class LoansService {
       const data = await this.loanRepo.getLoanFullDetails(loanId);
 
       return {
-        message: "data fetched succesfully"
+        message: "loan fetched succesfully"
         , data
       }
     }
@@ -678,5 +677,38 @@ export class LoansService {
     }
   }
 
+
+    async getAllLoan(userid: number) {
+
+    try {
+
+      const data = await this.loanRepo.getallloans(userid);
+
+      return {
+        message: "loans fetched succesfully"
+        , data
+      }
+    }
+    catch (error) {
+      console.error("get loans error is", error)
+    }
+  }
+
+
+     async getAllAccount() {
+
+    try {
+
+      const data = await this.loanRepo.getallbanks();
+
+      return {
+        message: "bank accounts fetched succesfully"
+        , data
+      }
+    }
+    catch (error) {
+      console.error("get account error is", error)
+    }
+  }
 
 }

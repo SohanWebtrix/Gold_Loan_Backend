@@ -6,7 +6,7 @@ import * as Sentry from "@sentry/node";
 
 
 Sentry.init({
-  dsn: "https://c44430e6475b8b79fa4c4862f087c093@o4511044105273344.ingest.de.sentry.io/4511044110450768",
+  // dsn: "https://c44430e6475b8b79fa4c4862f087c093@o4511044105273344.ingest.de.sentry.io/4511044110450768",
 });
 
 

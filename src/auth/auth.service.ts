@@ -40,27 +40,39 @@ export class AuthService {
 
 
 
-    async CreateUser(dto: AuthDto) {
+  // SERVICE
+async CreateUser(dto: any, userId: number) {
+    try {
+        console.log("create user dto is", dto);
 
-        try {
-            const result: any = await this.authRepo.insertUser(dto);
+        // 1️⃣ Insert into company table
+        const companyResult: any = await this.authRepo.insertCompany(dto, userId);
 
-            // 3️⃣ Check success
-            if (result && result.affectedRows === 1) {
-                return {
-                    success: true,
-                    message: 'User added successfully',
-                    userId: result.insertId,
-                };
-            }
+        const company_id = companyResult.insertId;
 
-            throw new InternalServerErrorException("Failed to add user");
+        // 2️⃣ Insert into customer table with company_id
+        const customerResult: any = await this.authRepo.insertCustomer(
+            dto,
+            userId,
+            company_id
+        );
+
+        // 3️⃣ Success check
+        if (customerResult && customerResult.affectedRows === 1) {
+            return {
+                success: true,
+                message: "Customer added successfully",
+                customerId: customerResult.insertId,
+                companyId: company_id,
+            };
         }
-        catch (error) {
-            console.error("CreateUser error", error)
-            throw error;
-        }
+
+        throw new InternalServerErrorException("Failed to add customer");
+    } catch (error) {
+        console.error("CreateCustomer error", error);
+        throw error;
     }
+}
 
        async CreateAdmin(dto: any) {
 

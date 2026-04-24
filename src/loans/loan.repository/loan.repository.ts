@@ -343,6 +343,19 @@ export class LoanRepository {
                         values.push(endOfDay);
                         return;
                     }
+
+                    if (f.operator === 'between') {
+                        console.log("modified date start value", f.value)
+                        console.log("modified date end value", f.valueTo)
+
+                        const startDate = `${f.value} 00:00:00`;
+                        const endDate = `${f.valueTo} 23:59:59`;
+
+                        where.push(`(${f.column} BETWEEN ? AND ?)`);
+                        values.push(startDate, endDate);
+                        return;
+                    }
+
                 }
 
                 // LIKE
@@ -362,6 +375,8 @@ export class LoanRepository {
       FROM loans lo
       LEFT JOIN customers a ON lo.created_by = a.customer_id
       LEFT JOIN customers a2 ON lo.modified_by = a2.customer_id
+      LEFT JOIN clients c1 ON lo.client_id = c1.cl_id
+
       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
     `;
 
@@ -489,12 +504,10 @@ export class LoanRepository {
 
             const sql = `
             SELECT lo.*,
-      a.cust_name AS created_by_name,
-        a2.cust_name AS modified_by_name,
+   
         CONCAT(c1.first_name, ' ', c1.last_name) as client_name
       FROM loans lo
-      LEFT JOIN customers a ON lo.created_by = a.customer_id
-      LEFT JOIN customers a2 ON lo.modified_by = a2.customer_id
+
       LEFT JOIN clients c1 ON lo.client_id = c1.cl_id
 
         ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
@@ -524,12 +537,10 @@ export class LoanRepository {
 
             const sql = `
             SELECT lo.*,
-                a.cust_name AS created_by_name,
-                a2.cust_name AS modified_by_name,
+               
                 CONCAT(c1.first_name, ' ', c1.last_name) as client_name
             FROM loans lo
-            LEFT JOIN customers a ON lo.created_by = a.customer_id
-            LEFT JOIN customers a2 ON lo.modified_by = a2.customer_id
+         
             LEFT JOIN clients c1 ON lo.client_id = c1.cl_id
             WHERE lo.compl_id = ${userid}
             ORDER BY loan_id DESC
@@ -1090,4 +1101,47 @@ LIMIT 1
             );
         }
     }
+
+
+    async getallloans(userid: number) {
+        try {
+            const rows = await this.db.query(
+                `SELECT 
+                loan_document_number ,
+                loan_id 
+             FROM loans 
+             WHERE compl_id = ?`,
+                [userid]
+            );
+
+            return rows;
+        }
+        catch (error) {
+            Sentry.captureException(error);
+            console.error("get all loans errors is", error);
+            throw error;
+        }
+    }
+
+
+
+        async getallbanks() {
+        try {
+            const rows = await this.db.query(
+                `SELECT 
+                id,account_type,bank_name
+             FROM bank_account 
+             `,
+            );
+
+            return rows;
+        }
+        catch (error) {
+            Sentry.captureException(error);
+            console.error("get all loans errors is", error);
+            throw error;
+        }
+    }
+
+
 }

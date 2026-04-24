@@ -44,6 +44,25 @@ export class LoansController {
     }
 
 
+       @Get('get_all_loans')
+    @UseGuards(AuthGuard('jwt'))
+
+    async getAllLoans(@Req() req: any,
+            @Headers('comp-id') companyId: string,
+) {
+        const userId = req.user.userId;
+        const companyIdNum = Number(companyId);
+
+        return this.loanServ.getAllLoan(companyIdNum)
+    }
+
+      @Get('get_bank_account')
+
+    async getAllBanks() {
+        return this.loanServ.getAllAccount()
+    }
+
+
     @Post('list')
     @UseGuards(AuthGuard('jwt'))
     async getLoans(
@@ -66,6 +85,7 @@ export class LoansController {
             filters,
             companyIdNum
         );
+        
     }
 
 
@@ -113,9 +133,7 @@ export class LoansController {
     ) {
 
         const userid = req.user.userId;
-                const companyIdNum = Number(companyId);
-
-
+        const companyIdNum = Number(companyId);
         return this.loanServ.searchLoans(search, Number(page),
             Number(limit), companyIdNum);
     }

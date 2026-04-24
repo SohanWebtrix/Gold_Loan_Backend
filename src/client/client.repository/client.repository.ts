@@ -14,9 +14,41 @@ import * as Sentry from '@sentry/node';
 
 @Injectable()
 export class ClientRepository {
-    constructor(private readonly db: DatabaseService) {
+    constructor(private readonly db: DatabaseService) {}
 
+      async getSearchClients(search: string, companyid: number) {
+        
+        try {
+            const rows: any = await this.db.query(
+                `
+            SELECT 
+                cl_id,
+                CONCAT(first_name, ' ', last_name) AS full_name
+            FROM clients
+            WHERE compc_id = ?
+            AND (
+                first_name LIKE ?
+                OR last_name LIKE ?
+                OR CONCAT(first_name, ' ', last_name) LIKE ?
+                OR mobile_no LIKE ?
+            )
+            `,
+                [
+                    companyid,
+                    `%${search}%`,
+                    `%${search}%`,
+                    `%${search}%`,
+                    `%${search}%`
+                ]
+            );
+
+            return rows;
+        } catch (error) {
+            console.error('getClient search error', error);
+            throw error;
+        }
     }
+
 
     async getSearchClient(page: number, limit: number, search: string, userid: number) {
         try {
@@ -117,12 +149,12 @@ export class ClientRepository {
         }
     }
 
-    async searchCities(search?: string) {
+    async searchCities(search?: string,stateId?:number) {
         try {
             if (search && search.trim().length) {
                 return await this.db.query(
-                    'SELECT * FROM ab_cities WHERE city_name LIKE ?',
-                    [`%${search.trim()}%`],
+                    'SELECT * FROM ab_cities WHERE city_name LIKE ? AND state_id=?',
+                    [`%${search.trim()}%`,stateId],
                 );
             }
 
@@ -177,12 +209,14 @@ export class ClientRepository {
 
             return await this.db.query('SELECT * FROM ab_states');
         }
+
         catch (error) {
             Sentry.captureException(error);
 
             console.error("search states erros is", error)
             throw error;
         }
+
     }
 
 
@@ -421,7 +455,7 @@ export class ClientRepository {
             Sentry.captureException(error);
 
             console.error("Client update error is", error)
-                if (error.code === "ER_DUP_ENTRY") {
+            if (error.code === "ER_DUP_ENTRY") {
 
                 const msg = error.sqlMessage;
 
@@ -435,7 +469,7 @@ export class ClientRepository {
 
                 throw new ConflictException("Duplicate value detected");
             }
-            
+
             throw error;
         }
 
@@ -690,13 +724,25 @@ export class ClientRepository {
       a.cust_name AS created_by_name,
         a2.cust_name AS modified_by_name,
         ct.city_name AS city_name,
-        st.state_name AS state_name
+        st.state_name AS state_name,
+
+            COUNT(CASE WHEN l.loan_status = 'active' THEN 1 END) AS active_loans,
+            COUNT(CASE WHEN l.loan_status = 'close' THEN 1 END) AS closed_loans,
+            COUNT(CASE WHEN l.loan_status = 'overdue' THEN 1 END) AS overdue_loans,
+                     -- Total Loan Amount
+            COALESCE(SUM(l.total_amount), 0) AS total_loan_amount
+
+
       FROM clients cl
        LEFT JOIN customers a ON cl.created_by = a.customer_id
       LEFT JOIN customers a2 ON cl.modified_by = a2.customer_id
       LEFT JOIN ab_cities ct ON cl.city = ct.city_id
       LEFT JOIN ab_states st ON cl.state = st.state_id
-        WHERE cl.compc_id=${userid}
+      LEFT JOIN loans l 
+      ON l.client_id = cl.cl_id
+
+      WHERE cl.compc_id=${userid}
+        GROUP BY cl.cl_id
 
       ORDER BY cl_id DESC
       LIMIT ${safeLimit} OFFSET ${safeOffset}

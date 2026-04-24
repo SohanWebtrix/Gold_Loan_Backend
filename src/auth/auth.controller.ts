@@ -1,10 +1,11 @@
 /* eslint-disable prettier/prettier */
 
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Res } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthDto } from './auth.dto';
 import type { Response, Request } from 'express';
 import { LoginDto } from './LoginDto';
+import { AuthGuard } from '@nestjs/passport';
 
 @Controller('auth')
 export class AuthController {
@@ -13,9 +14,13 @@ export class AuthController {
 
   }
 
-  @Post('create_user')
-  async CreateUser(@Body() dto: AuthDto) {
-    return this.authService.CreateUser(dto);
+  @Post('create_customer')
+             @UseGuards(AuthGuard('jwt'))
+  async CreateUser(@Body() dto: any,@Req() req:any) {
+                     const userId = req.user.userId;
+
+
+    return this.authService.CreateUser(dto,userId);
   }
 
    @Post('create_admin')
