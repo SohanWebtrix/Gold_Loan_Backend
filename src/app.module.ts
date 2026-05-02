@@ -15,6 +15,8 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { CustomersModule } from './customers/customers.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { LedureModule } from './ledure/ledure.module';
+import { AdminModule } from './admin/admin.module';
 
 
 @Module({
@@ -35,6 +37,8 @@ import { ScheduleModule } from '@nestjs/schedule';
     MortgagedModule,
     TransactionsModule,
     CustomersModule,
+    LedureModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],

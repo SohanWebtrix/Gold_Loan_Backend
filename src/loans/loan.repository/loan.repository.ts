@@ -16,6 +16,66 @@ export class LoanRepository {
 
     }
 
+    async generateNumber(companyId: number, docType: string): Promise<string> {
+
+
+        try {
+            const rows: any = await this.db.query(
+                `
+      SELECT *
+      FROM prefix_table
+      WHERE company_id = ?
+      AND doc_type = ?
+      FOR UPDATE
+      `,
+                [companyId, docType]
+            );
+
+            if (rows.length === 0) {
+                throw new Error("Sequence configuration not found");
+            }
+
+            const row = rows[0];
+
+            const nextNo = row.last_no + 1;
+
+            await this.db.query(
+                `
+      UPDATE prefix_table
+      SET last_no = ?
+      WHERE id = ?
+      `,
+                [nextNo, row.id]
+            );
+
+            return `${row.prefix}-${row.year}-${nextNo}`;
+
+        }
+        catch (error) {
+
+            throw error;
+        } finally {
+
+        }
+    }
+
+
+        
+
+        async getClientstatus(cid: number) {
+            try {
+                const rows = await this.db.query(
+                    'SELECT * FROM clients WHERE cl_id = ? LIMIT 1',
+                    [cid]
+                );
+                return rows[0];
+            }
+            catch (error) {
+                Sentry.captureException(error);
+    
+                console.error("get Clinet By Id error", error)
+            }
+        }
 
     async getFilteredCountSearch(search: string, userid: number): Promise<number> {
         try {
@@ -114,6 +174,95 @@ export class LoanRepository {
         }
     }
 
+  async insertLoanTransaction(
+        data: any,
+        userId:number,
+        conn:any,
+    ) {
+                const db = conn ?? this.db;
+
+        try {
+
+            const payload: any = {
+                ...data,
+                created_by: userId
+            };
+
+
+
+            Object.keys(payload).forEach(key => {
+                if (payload[key] === undefined) {
+                    payload[key] = null;
+                }
+            });
+
+            const columns = Object.keys(payload).join(", ");
+            const placeholders = Object.keys(payload).map(() => "?").join(", ");
+            const values = Object.values(payload);
+
+            const [result] = await db.query(
+                `INSERT INTO loan_transactions (${columns}) VALUES (${placeholders})`,
+                values
+            );
+
+            return result;
+
+        } catch (error: any) {
+
+            Sentry.captureException(error);
+
+            console.error("❌ fail to insert transaction DB error:", error);
+
+
+            throw new InternalServerErrorException(
+                "Failed to create transaction"
+            );
+        }
+    }
+
+
+      async insertLedger(
+        data: any,
+        conn:any,
+    ) {
+                const db = conn ?? this.db;
+
+        try {
+
+            const payload: any = {
+                ...data,
+            };
+
+
+            Object.keys(payload).forEach(key => {
+                if (payload[key] === undefined) {
+                    payload[key] = null;
+                }
+            });
+
+            const columns = Object.keys(payload).join(", ");
+            const placeholders = Object.keys(payload).map(() => "?").join(", ");
+            const values = Object.values(payload);
+
+            const [result] = await db.query(
+                `INSERT INTO ledger_entries (${columns}) VALUES (${placeholders})`,
+                values
+            );
+
+            return result;
+
+        } catch (error: any) {
+
+            Sentry.captureException(error);
+
+            console.error("❌ fail to insert ledure DB error:", error);
+
+
+            throw new InternalServerErrorException(
+                "Failed to insert ledure"
+            );
+        }
+    }
 
     // loan.repository.ts
 
@@ -230,7 +379,8 @@ export class LoanRepository {
 
 
 
-    async updateFilesPath(cid: number, files: any) {
+    async updateFilesPath(lid: number, files: any) {
+        
         try {
             const fields: string[] = [];
             const values: any[] = [];
@@ -252,7 +402,7 @@ export class LoanRepository {
               WHERE loan_id = ?
             `;
 
-            values.push(cid);
+            values.push(lid);
 
             const result = await this.db.query<ResultSetHeader>(sql, values);
 
@@ -536,14 +686,24 @@ export class LoanRepository {
             }
 
             const sql = `
-            SELECT lo.*,
-               
-                CONCAT(c1.first_name, ' ', c1.last_name) as client_name
+            SELECT
+                lo.*,
+                CONCAT(c1.first_name, ' ', c1.last_name) AS client_name,
+                COALESCE(tp.total_paid_amount, 0) AS total_paid_amount,
+                lo.total_amount - COALESCE(tp.total_paid_amount, 0) AS total_pending_amount,
+                TIMESTAMPDIFF(MONTH, lo.loan_start_date, lo.due_date) AS tenure_months
             FROM loans lo
-         
             LEFT JOIN clients c1 ON lo.client_id = c1.cl_id
+            LEFT JOIN (
+                SELECT
+                    loan_id,
+                    SUM(COALESCE(paid_amount, 0)) AS total_paid_amount
+                FROM loan_transactions
+                WHERE status = 'SUCCESS'
+                GROUP BY loan_id
+            ) tp ON tp.loan_id = lo.loan_id
             WHERE lo.compl_id = ${userid}
-            ORDER BY loan_id DESC
+            ORDER BY lo.loan_id DESC
             LIMIT ${safeLimit} OFFSET ${safeOffset}
         `;
 
@@ -598,6 +758,26 @@ export class LoanRepository {
 
         try {
             const [rows] = await db.query(
+                'SELECT * FROM mortgaged_items WHERE loan_id = ?',
+                [loanId]
+            );
+            return rows;
+        }
+        catch (error) {
+            Sentry.captureException(error);
+
+            console.error("get mortgaged by id erros is", error)
+            throw error;
+        }
+    }
+
+
+
+    
+    async getMortgage(loanId: number) {
+
+        try {
+            const rows = await this.db.query(
                 'SELECT * FROM mortgaged_items WHERE loan_id = ?',
                 [loanId]
             );
@@ -957,6 +1137,7 @@ export class LoanRepository {
     async updateLoan(
         loan_id: number,
         dto: any,
+        filePaths:any,
         userid: number,
         conn
     ) {
@@ -968,6 +1149,7 @@ export class LoanRepository {
 
             const updateData = {
                 ...dto,
+                ...filePaths,
             };
 
             // ❗ remove flags (not DB columns)
@@ -1039,7 +1221,8 @@ export class LoanRepository {
      SELECT 
     l.*,
     c.aadhaar_id_path as aadhaar_id_path,
-    c.pan_card_path as pan_card_path
+    c.pan_card_path as pan_card_path,
+     CONCAT(c.first_name, ' ', c.last_name) as client_name
 FROM loans l
 LEFT JOIN clients c 
     ON l.client_id = c.cl_id
@@ -1080,12 +1263,24 @@ LIMIT 1
                 [loanId]
             );
 
+            const transaction = await this.db.query(
+                `
+      SELECT *
+      FROM loan_transactions
+      WHERE loan_id = ?
+      ORDER BY transaction_id ASC
+      `,
+                [loanId]
+            );
+
+
             return {
                 success: true,
                 data: {
                     loan,
                     nominees,
                     mortgaged_items: mortgagedItems,
+                    transaction: transaction
                 },
             };
 
@@ -1125,7 +1320,7 @@ LIMIT 1
 
 
 
-        async getallbanks() {
+    async getallbanks() {
         try {
             const rows = await this.db.query(
                 `SELECT 

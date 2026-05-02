@@ -90,6 +90,13 @@ export const LOAN_FILTER_SCHEMA = {
         operators: ['equals', 'not_equals', 'isEmpty', 'is_not_empty'],
     },
 
+        loan_status: {
+        column: 'lo.loan_status',
+        type: 'text',
+        operators: ['equals', 'contains', 'starts_with', 'ends_with', 'isEmpty', 'is_not_empty'],
+    },
+
+
     created_date: {
         column: 'cl.created_date',
         type: 'date',

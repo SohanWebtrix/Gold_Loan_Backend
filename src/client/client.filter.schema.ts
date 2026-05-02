@@ -63,7 +63,7 @@ export const CLIENT_FILTER_SCHEMA = {
   },
 
   city: {
-    column: 'ct.city_name',
+    column: 'cl.city',
     type: 'text',
     operators: ['equals', 'contains', 'starts_with', 'ends_with', 'isEmpty', 'is_not_empty'],
   },

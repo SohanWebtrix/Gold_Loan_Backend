@@ -9,6 +9,7 @@ import { CreateLoanDto } from './createLoan.dto';
 export class LoansController {
 
     constructor(private readonly loanServ: LoansService) {
+
     }
 
 
@@ -17,7 +18,8 @@ export class LoansController {
 
     @UseInterceptors(
         FileFieldsInterceptor([ //basically for processing file on server
-            { name: 'gold_item', maxCount: 20 }
+            { name: 'gold_item', maxCount: 20 },
+            { name: 'payment_proof_file', maxCount: 1 }
         ]),
     )
     async CreateLoan(@Body('data') data: string,
@@ -27,36 +29,38 @@ export class LoansController {
         @UploadedFiles()
         files: {
             gold_item?: Express.Multer.File[];
+            payment_proof_file?: Express.Multer.File[];
         },) {
-                    const companyIdNum = Number(companyId);
-
+        const companyIdNum = Number(companyId);
 
         const loanDto = JSON.parse(data);
+        const transactionFIle = files?.payment_proof_file?.[0];
 
         const userId = req.user.userId;
 
         return this.loanServ.createLoan(
             loanDto,
             files,
+            transactionFIle,
             userId,
             companyIdNum,
         );
     }
 
 
-       @Get('get_all_loans')
+    @Get('get_all_loans')
     @UseGuards(AuthGuard('jwt'))
 
     async getAllLoans(@Req() req: any,
-            @Headers('comp-id') companyId: string,
-) {
+        @Headers('comp-id') companyId: string,
+    ) {
         const userId = req.user.userId;
         const companyIdNum = Number(companyId);
 
         return this.loanServ.getAllLoan(companyIdNum)
     }
 
-      @Get('get_bank_account')
+    @Get('get_bank_account')
 
     async getAllBanks() {
         return this.loanServ.getAllAccount()
@@ -85,7 +89,7 @@ export class LoansController {
             filters,
             companyIdNum
         );
-        
+
     }
 
 
@@ -95,6 +99,7 @@ export class LoansController {
     @UseInterceptors(
         FileFieldsInterceptor([
             { name: 'gold_item', maxCount: 20 },
+            { name: 'payment_proof_file', maxCount: 1 }
         ]),
     )
     async updateLoan(
@@ -104,8 +109,12 @@ export class LoansController {
         @UploadedFiles()
         files: {
             gold_item?: Express.Multer.File[];
+            payment_proof_file?: Express.Multer.File[];
         },
     ) {
+
+        const transactionFIle = files?.payment_proof_file?.[0];
+
         const dto = JSON.parse(data);
         const userId = req.user.userId;
 
@@ -113,22 +122,48 @@ export class LoansController {
             Number(loanId),
             dto,
             files,
+            transactionFIle,
             userId,
         );
     }
 
 
     @Get('get_loan/:id')
-    async getTrainingData(
+    async getLoanByiId(
         @Param('id', ParseIntPipe) id: number) {
         return this.loanServ.getLoanById(id)
     }
 
+    @Get('mortgaged_recpt/:loanId')
+    @UseGuards(AuthGuard('jwt'))
+    async getMortgageItemsByLoanId(
+        @Param('loanId', ParseIntPipe) loanId: number,
+    ) {
+        return this.loanServ.getMortgageItemsByLoanId(loanId);
+    }
+
+        @Get('loan_recpt/:loanId')
+    @UseGuards(AuthGuard('jwt'))
+    async getLoanRecpt(
+        @Param('loanId', ParseIntPipe) loanId: number,
+    ) {
+        return this.loanServ.getLoanRecpt(loanId);
+    }
+
+    @Get('client_summary/:clientId')
+    @UseGuards(AuthGuard('jwt'))
+    async getClientLoanSummary(
+        @Param('clientId', ParseIntPipe) clientId: number,
+        @Headers('comp-id') companyId: string,
+    ) {
+        const companyIdNum = Number(companyId);
+        return this.loanServ.getClientLoanSummary(clientId, companyIdNum);
+    }
 
     @Post("search-loan")
     @UseGuards(AuthGuard('jwt'))
     async searchLoan(@Query("search") search: string, @Query('page') page = '1',
-        @Query('limit') limit = '10', @Req() req: any,@Headers('comp-id') companyId: string,
+        @Query('limit') limit = '10', @Req() req: any, @Headers('comp-id') companyId: string,
 
     ) {
 

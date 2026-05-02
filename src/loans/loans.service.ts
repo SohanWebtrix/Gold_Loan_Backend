@@ -1,10 +1,12 @@
 /* eslint-disable prettier/prettier */
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DatabaseService } from 'src/database/database.service';
 import { v4 as uuidv4 } from 'uuid';
 import { LoanRepository } from './loan.repository/loan.repository';
+import { TransactionRepository } from 'src/transactions/transaction.repository/transaction.repository';
+import { LedureRepository } from 'src/ledure/ledure.repository/ledure.repository';
 import * as Sentry from '@sentry/node';
 import { LOAN_FILTER_SCHEMA } from './loan.filter.schema';
 import { randomBytes } from "crypto";
@@ -17,6 +19,8 @@ export class LoansService {
   constructor(
     private readonly db: DatabaseService,
     private readonly loanRepo: LoanRepository,
+    private readonly transactionRepo: TransactionRepository,
+    private readonly ledureRepo: LedureRepository,
   ) { }
 
 
@@ -69,6 +73,129 @@ export class LoansService {
     }
   }
 
+  async getClientLoanSummary(clientId: number, companyId: number) {
+    try {
+      const loans = await this.transactionRepo.getClientLoanSummary(clientId, companyId);
+
+      const loanRows = (loans || []).map((loan: any) => {
+        const totalAmount = Number(loan.total_amount ?? 0);
+        const principalAmount = Number(loan.principal_amount ?? 0);
+        const interestAmount = Number(loan.interest_amount ?? 0);
+        const interestRate = Number(loan.interest_rate ?? 0);
+        const totalPaidAmount = Number(loan.total_paid_amount ?? 0);
+        const totalPaidPrincipal = Number(loan.total_paid_principal ?? 0);
+        const totalPaidInterest = Number(loan.total_paid_interest ?? 0);
+        const pendingAmount = Number(
+          loan.current_total_balance ?? (totalAmount - totalPaidAmount)
+        );
+        
+        const pendingPrincipal = Number(
+          loan.current_principal_balance ?? (principalAmount - totalPaidPrincipal)
+        );
+        const pendingInterest = Number(
+          loan.current_interest_balance ?? (interestAmount - totalPaidInterest)
+        );
+
+        return {
+          loan_id: loan.loan_id,
+          loan_status:loan.loan_status,
+          loan_document_number: loan.loan_document_number,
+          principal_amount: principalAmount,
+          interest_amount: interestAmount,
+          total_amount: totalAmount,
+          interest_rate: interestRate,
+          total_paid_amount: totalPaidAmount,
+          total_paid_principal: totalPaidPrincipal,
+          total_paid_interest: totalPaidInterest,
+          total_pending_amount: Math.max(0, pendingAmount),
+          total_pending_principal: Math.max(0, pendingPrincipal),
+          total_pending_interest: Math.max(0, pendingInterest),
+          last_payment_date: loan.last_payment_date || null,
+        };
+      });
+
+      const totals = loanRows.reduce(
+        (acc, loan) => {
+          acc.total_loan_amount += loan.total_amount;
+          acc.total_principal += loan.principal_amount;
+          acc.total_interest_amount += loan.interest_amount;
+          acc.total_interest_rate += loan.interest_rate;
+          acc.total_paid_amount += loan.total_paid_amount;
+          acc.total_paid_principal += loan.total_paid_principal;
+          acc.total_paid_interest += loan.total_paid_interest;
+          acc.total_pending_amount += loan.total_pending_amount;
+          acc.total_pending_principal += loan.total_pending_principal;
+          acc.total_pending_interest += loan.total_pending_interest;
+          return acc;
+        },
+        {
+          total_loan_amount: 0,
+          total_principal: 0,
+          total_interest_amount: 0,
+          total_interest_rate: 0,
+          total_paid_amount: 0,
+          total_paid_principal: 0,
+          total_paid_interest: 0,
+          total_pending_amount: 0,
+          total_pending_principal: 0,
+          total_pending_interest: 0,
+        },
+      );
+
+      const ledureRows = await this.ledureRepo.getLedgerByClientId(clientId, companyId);
+
+      return {
+        success: true,
+        message: loanRows.length ? 'Client loan summary fetched successfully' : 'No loans found for this client',
+        client_id: clientId,
+        loan_count: loanRows.length,
+        totals: {
+          ...totals,
+          average_interest_rate:
+            loanRows.length > 0 ? totals.total_interest_rate / loanRows.length : 0,
+        },
+        loans: loanRows,
+        ledure: ledureRows,
+      };
+    } catch (error) {
+      console.error('getClientLoanSummary error', error);
+      throw new InternalServerErrorException('Failed to fetch client loan summary');
+    }
+  }
+
+  async getMortgageItemsByLoanId(loanId: number) {
+    try {
+      const items = await this.loanRepo.getMortgage(loanId);
+
+
+      console.log("items is",items);
+      return {
+        success: true,
+        message: items?.length ? 'Mortgaged items fetched successfully' : 'No mortgaged items found for this loan',
+        loan_id: loanId,
+        mortgaged_items: items,
+      };
+    } catch (error) {
+      console.error('getMortgageItemsByLoanId error', error);
+      throw new InternalServerErrorException('Failed to fetch mortgaged items');
+    }
+  }
+
+    async getLoanRecpt(loanId: number) {
+    try {
+      const items = await this.loanRepo.getLoanById(loanId);
+      return {
+        success: true,
+        message: items?.length ? 'loan fetched successfully' : 'loan not found',
+        loan_id: loanId,
+        loan: items,
+      };
+    } catch (error) {
+      console.error('getMortgageItemsByLoanId error', error);
+      throw new InternalServerErrorException('Failed to fetch mortgaged items');
+    }
+  }
+
   private generateClientCode(): string {
     const year = new Date().getFullYear();
     const randomPart = randomBytes(3).toString("hex").toUpperCase(); // 6 chars
@@ -76,24 +203,136 @@ export class LoansService {
     return `GL-${year}-${randomPart}`;
   }
 
-  async createLoan(dto: any, files: any, userId: number,companyIdNum:number) {
+
+  private async saveClientFile(
+    file: Express.Multer.File | undefined,
+    cid: number,
+    prefix: string,
+    folderPath: string
+  ): Promise<{ dbPath: string | null; filePath: string | null }> {
+
+    if (!file) {
+      return { dbPath: null, filePath: null };
+    }
+
+    let allowedTypes = [".jpg", ".jpeg", ".png", ".pdf"];
+
+    if (prefix === "photo") {
+      allowedTypes = [".jpg", ".jpeg", ".png"];
+    }
+    const ext = path.extname(file.originalname).toLowerCase();
+
+    if (!allowedTypes.includes(ext)) {
+      throw new BadRequestException("Invalid file type");
+    }
+
+
+    const fileName = `${prefix}_${cid}_${uuidv4()}${path.extname(file.originalname)}`;
+    const filePath = path.join(folderPath, fileName);
+    const dbPath = `/${folderPath}/${fileName}`;
+
+    await fs.promises.writeFile(filePath, file.buffer);
+
+    return { dbPath, filePath };
+  }
+
+
+  private async replaceClientFile(
+    file: Express.Multer.File | undefined,
+    cid: number,
+    prefix: string,
+    folderPath: string,
+    oldFilePath?: string,
+    removeFile?: boolean
+  ): Promise<{ dbPath?: string | null; filePath?: string | null; oldFileToDelete?: string | null }> {
+    //                                                            ↑ return old path instead of deleting immediately
+
+    // CASE 1: user removed image
+    if (removeFile) {
+      return {
+        dbPath: null,
+        filePath: null,
+        oldFileToDelete: oldFilePath ?? null  // ✅ just return it, don't delete yet
+      };
+    }
+
+    // CASE 2: new upload
+    if (file) {
+      const fileName = `${prefix}_${cid}_${uuidv4()}${path.extname(file.originalname)}`;
+      const filePath = path.join(folderPath, fileName);
+      const dbPath = `/${folderPath}/${fileName}`;
+
+      await fs.promises.writeFile(filePath, file.buffer);  // write new file
+
+      return {
+        dbPath,
+        filePath,
+        oldFileToDelete: oldFilePath ?? null  // ✅ return old path, delete after DB succeeds
+      };
+    }
+
+    // CASE 3: untouched
+    return {};
+  }
+
+
+  async createLoan(dto: any, files: any, transactionRecpt: Express.Multer.File | undefined, userId: number, companyIdNum: number) {
 
     let uploadedPaths: string[] = [];
     let loanId: number | null = null;
 
     try {
 
-      dto.loan_document_number = this.generateClientCode()
-      dto.compl_id=companyIdNum;
+      const clientData = await this.loanRepo.getClientstatus(dto.client_id);
+
+      if (!clientData) {
+        throw new NotFoundException("Client not found");
+      }
+
+      if (clientData.status?.toLowerCase() === "inactive") {
+        throw new BadRequestException(
+          "Loan cannot be created for inactive client"
+        );
+      }
+
+      const loan_no = await this.loanRepo.generateNumber(companyIdNum, "LOAN")
+      dto.loan_document_number = loan_no;
+      dto.compl_id = companyIdNum;
       // STEP 1: Insert loan first
+
       const loanRes = await this.loanRepo.insertLoan(dto, userId);
       console.log("loan id in loanRes is", loanRes)
 
-      loanId = loanRes.insertId;
+       loanId = loanRes.insertId;
+
 
       if (loanId === null) {
         throw new Error('Loan ID not generated');
       }
+
+      // ✅ STEP 3: Create folder using cid
+      const folderPath1 = `uploads/loan/${loanId}`;
+      await fs.promises.mkdir(folderPath1, { recursive: true });
+
+      // ✅ STEP 4: Save files
+      const [transactionImg] = await Promise.all([
+        this.saveClientFile(transactionRecpt, loanId, "transaction", folderPath1),
+      ]);
+
+      if (transactionImg?.filePath) {
+        uploadedPaths.push(transactionImg.filePath);
+      }
+
+      // ✅ STEP 5: Update DB with file paths
+
+      const updateResult = await this.loanRepo.updateFilesPath(loanId, {
+        payment_proof_file: transactionImg.dbPath
+      });
+
+      if (!updateResult || updateResult.affectedRows !== 1) {
+        throw new Error("Client file update failed");
+      }
+
 
       const finalLoanId = loanId;
       // STEP 2: Folder path
@@ -107,12 +346,11 @@ export class LoansService {
 
           const file = files?.gold_item?.[index];
 
-          if (!file) {
-            throw new BadRequestException(
-              `Gold image required for item ${index + 1}`
-            );
-          }
-
+          // if (!file) {
+          //   throw new BadRequestException(
+          //     `Gold image required for item ${index + 1}`
+          //   );
+          // }
 
           const imgPath = await this.saveFile(
             file,
@@ -126,7 +364,7 @@ export class LoansService {
             uploadedPaths.push(imgPath);
           }
 
-          console.log("upload path for createLoan is",uploadedPaths);
+          console.log("upload path for createLoan is", uploadedPaths);
 
           return {
             ...item,
@@ -138,10 +376,19 @@ export class LoansService {
       // STEP 4: Transaction only for child tables
       await this.db.transaction(async (conn) => {
 
-        if (dto.nominees?.length) {
+        const validNominees = dto.nominees?.filter((nominee) => {
+          return (
+            nominee.nominee_name?.trim() ||
+            nominee.nominee_relation?.trim() ||
+            nominee.nominee_address?.trim() ||
+            nominee.nominee_phone?.trim()
+          );
+        });
+
+        if (validNominees?.length) {
           await this.loanRepo.insertNomineesBulk(
             finalLoanId,
-            dto.nominees,
+            validNominees,
             conn
           );
         }
@@ -153,6 +400,98 @@ export class LoansService {
             conn
           );
         }
+
+
+
+         if (
+        dto.Loan_status &&
+        dto.Loan_status === "active"
+      ) {
+        // Generate Receipt Number
+        const receiptNo =
+          await this.loanRepo.generateNumber(
+            companyIdNum,
+            "TRANSACTION"
+          );
+
+        // -------------------------------------
+        // Insert loan_transactions row
+        // -------------------------------------
+        // const txRes =
+        //   await this.loanRepo.insertLoanTransaction(
+        //     {
+        //       receipt_no: receiptNo,
+        //       loan_id: loanId,
+        //       client_id: dto.client_id,
+        //       company_id: companyIdNum,
+        //       transaction_date: new Date(),
+        //       transaction_type: "DISBURSEMENT",
+        //       payment_method: dto.payment_type,
+        //       paid_amount: 0,
+        //       principal_paid: 0,
+        //       interest_paid: 0,
+        //       overdue_paid: 0,
+        //       topup_amount: 0,
+        //       principal_balance: dto.principal_amount,
+        //       interest_balance: dto.interest_amount,
+        //       overdue_balance: dto.overdue_amount||0,
+        //       total_balance: dto.total_amount,
+        //       remarks: "Loan Disbursed",
+        //       cheque_no: dto.cheque_no || null,
+        //       account_type: dto.account_type,
+        //       transaction_ref_no:
+        //         dto.transaction_ref_no || null,
+        //       status: "SUCCESS",
+        //       created_by: userId,
+        //       payment_proof_path:
+        //         transactionImg?.dbPath || null,
+        //     },
+        //     userId,
+        //     conn
+        //   );
+
+        // const transactionId = txRes.insertId;
+
+        // -------------------------------------
+        // Ledger Entry 1
+        // DR Loan Receivable
+        // -------------------------------------
+        await this.loanRepo.insertLedger(
+          {
+            loan_id: loanId,
+            client_id: dto.client_id,
+            company_id: companyIdNum,
+            credit: dto.principal_amount,
+            debit: 0,
+            entry_type: "DISBURSEMENT",
+            remarks: "Loan given to customer",
+            status:"credit",
+            type:"loan"
+          },
+          conn
+        );
+
+        // -------------------------------------
+        // Ledger Entry 2
+        // CR Selected Account
+        // -------------------------------------
+        await this.loanRepo.insertLedger(
+          {
+            loan_id: loanId,
+            client_id: dto.client_id,
+            company_id: companyIdNum,
+            account_id: dto.account_type,
+            credit: 0,
+            debit: dto.principal_amount,
+            entry_type: "DISBURSEMENT",
+            remarks: "Paid from selected account",
+            status:"debit",
+            type:"account"
+          },
+          conn
+        );
+      }
+        
       });
 
       return {
@@ -166,7 +505,7 @@ export class LoansService {
       // Delete uploaded files
       for (const filePath of uploadedPaths) {
 
-                const finalPaths = path.resolve(filePath.replace(/^[/\\]+/, ''));
+        const finalPaths = path.resolve(filePath.replace(/^[/\\]+/, ''));
 
         if (fs.existsSync(finalPaths)) {
           await fs.promises.unlink(finalPaths);
@@ -188,6 +527,7 @@ export class LoansService {
     loanId: number,
     dto: any,
     files: any,
+    transactionfile: Express.Multer.File | undefined,
     userId: number,
   ) {
 
@@ -210,6 +550,29 @@ export class LoansService {
       // ==========================================
       // STEP 2: Folder Path
       // ==========================================
+
+      const folderPath1 = `uploads/loan/${loanId}`;
+      await fs.promises.mkdir(folderPath1, { recursive: true });
+
+      const transaction_photo = await this.replaceClientFile(transactionfile, loanId, "transaction", folderPath1, loan.transaction_path, dto.remove_adhar)
+
+
+      if (transaction_photo.filePath) {
+        newUploads.push(transaction_photo.filePath);
+      }
+
+      if (transaction_photo.oldFileToDelete) {
+        oldFilesToDelete.push(transaction_photo.oldFileToDelete);
+      }
+
+
+      const fileUpdates: any = {};
+
+      if (transaction_photo.dbPath !== undefined) {
+        fileUpdates.payment_proof_file = transaction_photo.dbPath;
+      }
+
+
       const folderPath =
         `uploads/gold/${userId}/${loan.client_id}/${loanId}`;
 
@@ -253,10 +616,10 @@ export class LoansService {
                   folderPath
                 );
 
-            if (fileName) {
-   newUploads.push(fileName);
-}
-              console.log("newUploads are",newUploads)
+              if (fileName) {
+                newUploads.push(fileName);
+              }
+              console.log("newUploads are", newUploads)
               return {
                 ...item,
                 gold_item: fileName,
@@ -291,6 +654,7 @@ export class LoansService {
           await this.loanRepo.updateLoan(
             loanId,
             { ...dto, modified_date },
+            fileUpdates,
             userId,
             conn
           );
@@ -298,9 +662,21 @@ export class LoansService {
           // ----------------------------------
           // B. Sync Nominees
           // ----------------------------------
+
+          const validNominees = (dto.nominees ?? []).filter((nominee) => {
+  return (
+    nominee.nominee_name?.trim() ||
+    nominee.nominee_relation?.trim() ||
+    nominee.nominee_address?.trim() ||
+    nominee.nominee_phone?.trim()
+  );
+});
+
+
+
           await this.syncNominees(
             loanId,
-            dto.nominees ?? [],
+            validNominees,
             conn
           );
 
@@ -347,7 +723,7 @@ export class LoansService {
       // delete new uploaded files
       for (const p of newUploads) {
 
-                const finalPathnew = path.resolve(p.replace(/^[/\\]+/, ''));
+        const finalPathnew = path.resolve(p.replace(/^[/\\]+/, ''));
 
         if (fs.existsSync(finalPathnew)) {
           await fs.promises.unlink(finalPathnew)
@@ -471,7 +847,7 @@ export class LoansService {
           !incomingIds.includes(
             row.gold_item_id
           )
-      );  
+      );
 
     console.log("deleted Rows are", deleteRows);
     if (deleteRows.length) {
@@ -678,7 +1054,7 @@ export class LoansService {
   }
 
 
-    async getAllLoan(userid: number) {
+  async getAllLoan(userid: number) {
 
     try {
 
@@ -695,7 +1071,7 @@ export class LoansService {
   }
 
 
-     async getAllAccount() {
+  async getAllAccount() {
 
     try {
 
@@ -712,3 +1088,4 @@ export class LoansService {
   }
 
 }
+

@@ -1,11 +1,12 @@
 /* eslint-disable prettier/prettier */
 
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { AuthDto } from './auth.dto';
-import type { Response, Request } from 'express';
 import { LoginDto } from './LoginDto';
+import type { Request } from 'express';
 import { AuthGuard } from '@nestjs/passport';
+
+type JwtRequest = Request & { user: { userId: number } };
 
 @Controller('auth')
 export class AuthController {
@@ -15,12 +16,32 @@ export class AuthController {
   }
 
   @Post('create_customer')
-             @UseGuards(AuthGuard('jwt'))
-  async CreateUser(@Body() dto: any,@Req() req:any) {
-                     const userId = req.user.userId;
+  @UseGuards(AuthGuard('jwt'))
+  async CreateUser(@Body() dto: any, @Req() req: JwtRequest) {
+    const userId = req.user.userId;
+    return this.authService.CreateUser(dto, userId);
+  }
 
+  @Put('update_customer/:customer_id')
+  @UseGuards(AuthGuard('jwt'))
+  async UpdateUser(@Body() dto: any, @Req() req: JwtRequest,@Param('customer_id') customerId: string
 
-    return this.authService.CreateUser(dto,userId);
+) {
+    const customerIdNumber = Number(customerId);
+
+    const userId = req.user.userId;
+    return this.authService.UpdateCustomer(dto,customerIdNumber, userId);
+  }
+
+  @Get('customer/:customer_id')
+  @UseGuards(AuthGuard('jwt'))
+  async getCustomerDetails(
+    @Param('customer_id') customerId: string,
+    @Headers('comp-id') compIdHeader: string,
+  ) {
+    const customerIdNumber = Number(customerId);
+    const compIdNumber = compIdHeader ? Number(compIdHeader) : undefined;
+    return this.authService.getCustomerDetails(customerIdNumber, compIdNumber);
   }
 
    @Post('create_admin')
@@ -31,7 +52,6 @@ export class AuthController {
   @Post('verifyUser')
   async LoginByEmail(
     @Body() body: LoginDto,
-    @Res({ passthrough: true }) res: Response,
   ) {
     
     const result = await this.authService.loginWithEmail(
@@ -52,7 +72,6 @@ export class AuthController {
     @Post('verifyAdmin')
   async LoginById(
     @Body() body: LoginDto,
-    @Res({ passthrough: true }) res: Response,
   ) {
     
     const result = await this.authService.loginEmailAdmin(
@@ -78,8 +97,7 @@ export class AuthController {
 
   @Post('verify_otp_email')
   async verifyOtpEmail(
-    @Body() body,
-    @Res({ passthrough: true }) res: Response,
+    @Body() body: { email: string; otp: string },
   ) {
     const result = await this.authService.verifyEmailOtp(body.email, body.otp);
 
@@ -90,7 +108,7 @@ export class AuthController {
 
   @Post('reset_password')
   async resetPassword(
-    @Body() body,
+    @Body() body: { email: string; password: string },
   ) {
 
     return this.authService.resetPassword(body.email, body.password);

@@ -3,6 +3,9 @@ import { BadRequestException, Injectable, InternalServerErrorException } from '@
 import { TRANSACTION_FILTER_SCHEMA } from './transaction.filter.schema';
 import { TransactionRepository } from './transaction.repository/transaction.repository';
 import { DatabaseService } from 'src/database/database.service';
+import { v4 as uuidv4 } from 'uuid';
+import * as fs from 'fs';
+import * as path from 'path';
 import { randomBytes } from 'crypto';
 
 @Injectable()
@@ -90,244 +93,613 @@ export class TransactionsService {
     }
   }
 
-  async createTransaction(dto, userId, companyId) {
+  // async createTransaction(dto, paymentProofFile: Express.Multer.File | undefined, userId, companyId) {
+
+  //   let folderPath: string | null = null;
+  //   let transactionid: number | null = null;
+
+  //   try {
+
+  //     dto.company_id = companyId;
+  //     dto.receipt_no = this.generateReciptCode();
+
+  //     console.log("company id is ", companyId)
+  //     // STEP 1 Fetch Loan (outside transaction)
+  //     const loan = await this.transactionrepo.getLoanById(dto.loan_id);
+
+  //     if (!loan) {
+  //       throw new BadRequestException('Loan not found');
+  //     }
+
+  //     let principalBalance =
+  //       Number(
+  //         loan.principal_amount,
+  //       );
+
+  //     let interestBalance =
+  //       Number(
+  //         loan.interest_amount,
+  //       );
+
+  //     let overdueBalance =
+  //       Number(
+  //         loan.overdue_amount || 0,
+  //       );
+
+  //     let principalPaid = 0;
+  //     let interestPaid = 0;
+  //     let overduePaid = 0;
+  //     let topupAmount = 0;
+
+  //     const totalPaid =
+  //       Number(dto.paid_amount || 0);
 
 
-    dto.company_id = companyId;
-    dto.receipt_no = this.generateReciptCode();
+  //     // STEP 2 Calculations (outside transaction)
+  //     // ==========================
+  //     // STEP 2 : TRANSACTION TYPE
+  //     // ==========================
 
-    console.log("company id is ", companyId)
-    // STEP 1 Fetch Loan (outside transaction)
-    const loan = await this.transactionrepo.getLoanById(dto.loan_id);
+  //     switch (
+  //     dto.transaction_type
+  //     ) {
 
-    if (!loan) {
-      throw new BadRequestException('Loan not found');
-    }
+  //       // -----------------------
+  //       // PRINCIPAL ONLY
+  //       // -----------------------
+  //       case 'LOAN_AMOUNT_ONLY':
 
-    let principalBalance =
-      Number(
-        loan.principal_amount,
-      );
+  //         principalPaid =
+  //           Number(
+  //             dto.principal_paid || 0,
+  //           );
 
-    let interestBalance =
-      Number(
-        loan.interest_amount,
-      );
+  //         if (
+  //           principalPaid >
+  //           principalBalance
+  //         ) {
+  //           throw new BadRequestException(
+  //             'Principal exceeds balance',
+  //           );
+  //         }
 
-    let overdueBalance =
-      Number(
-        loan.overdue_amount || 0,
-      );
+  //         principalBalance -=
+  //           principalPaid;
 
-    let principalPaid = 0;
-    let interestPaid = 0;
-    let overduePaid = 0;
-    let topupAmount = 0;
-
-    const totalPaid =
-      Number(dto.paid_amount || 0);
+  //         break;
 
 
-    // STEP 2 Calculations (outside transaction)
-    // ==========================
-    // STEP 2 : TRANSACTION TYPE
-    // ==========================
+  //       // -----------------------
+  //       // INTEREST ONLY
+  //       // -----------------------
+  //       case 'INTEREST_ONLY':
 
-    switch (
-    dto.transaction_type
-    ) {
+  //         interestPaid =
+  //           Number(
+  //             dto.interest_paid || 0,
+  //           );
 
-      // -----------------------
-      // PRINCIPAL ONLY
-      // -----------------------
-      case 'LOAN_AMOUNT_ONLY':
+  //         if (
+  //           interestPaid >
+  //           interestBalance
+  //         ) {
+  //           throw new BadRequestException(
+  //             'Interest exceeds balance',
+  //           );
+  //         }
 
-        principalPaid =
-          Number(
-            dto.principal_paid || 0,
-          );
+  //         interestBalance -=
+  //           interestPaid;
 
-        if (
-          principalPaid >
-          principalBalance
-        ) {
+  //         break;
+
+
+  //       // -----------------------
+  //       // PRINCIPAL + INTEREST + OVERDUE
+  //       // -----------------------
+  //       case 'LOAN_PLUS_INTEREST':
+
+  //         principalPaid =
+  //           Number(
+  //             dto.principal_paid || 0,
+  //           );
+
+  //         interestPaid =
+  //           Number(
+  //             dto.interest_paid || 0,
+  //           );
+
+  //         overduePaid =
+  //           Number(
+  //             dto.overdue_paid || 0,
+  //           );
+
+  //         if (
+  //           principalPaid >
+  //           principalBalance
+  //         ) {
+  //           throw new BadRequestException(
+  //             'Principal exceeds balance',
+  //           );
+  //         }
+
+  //         if (
+  //           interestPaid >
+  //           interestBalance
+  //         ) {
+  //           throw new BadRequestException(
+  //             'Interest exceeds balance',
+  //           );
+  //         }
+
+  //         if (
+  //           overduePaid >
+  //           overdueBalance
+  //         ) {
+  //           throw new BadRequestException(
+  //             'Overdue exceeds balance',
+  //           );
+  //         }
+
+  //         principalBalance -=
+  //           principalPaid;
+
+  //         interestBalance -=
+  //           interestPaid;
+
+  //         overdueBalance -=
+  //           overduePaid;
+
+  //         break;
+
+
+  //       // -----------------------
+  //       // TOPUP
+  //       // -----------------------
+  //       case 'TOPUP':
+
+  //         topupAmount =
+  //           totalPaid;
+
+  //         principalBalance +=
+  //           topupAmount;
+
+  //         break;
+
+  //       default:
+  //         throw new BadRequestException(
+  //           'Invalid transaction type',
+  //         );
+  //     }
+
+  //     const totalBalance =
+  //       principalBalance +
+  //       interestBalance +
+  //       overdueBalance;
+
+  //     let loanStatus = loan.loan_status;
+
+  //     if (Number(totalBalance).toFixed(2) === '0.00') {
+  //       loanStatus = 'close';
+  //     }
+
+  //     // STEP 3 Short transaction only
+  //     const result = await this.db.transaction(async (conn) => {
+
+  //       const insertResult = await this.transactionrepo.insertTransaction(
+  //         {
+  //           ...dto,
+  //           client_id: loan.client_id,
+  //           loan_id: dto.loan_id,
+
+  //           principal_paid: principalPaid,
+  //           interest_paid: interestPaid,
+  //           overdue_paid: overduePaid,
+  //           topup_amount: topupAmount,
+
+  //           principal_balance: principalBalance,
+  //           interest_balance: interestBalance,
+  //           overdue_balance: overdueBalance,
+  //           total_balance: totalBalance,
+
+  //           created_by: userId
+  //         },
+  //         conn
+  //       );
+
+  //       const insertId = insertResult[0].insertId;
+
+  //       // ==========================
+  //       // STEP 4 : UPDATE LOAN
+  //       // ==========================
+  //       await this.transactionrepo.updateLoanBalance(
+  //         dto.loan_id,
+  //         {
+  //           principal_amount:
+  //             principalBalance,
+
+  //           interest_amount:
+  //             interestBalance,
+
+  //           total_amount:
+  //             totalBalance,
+
+  //           loan_status:
+  //             loanStatus,
+  //         },
+  //         conn,
+  //       );
+
+
+  //       return insertId;
+  //     });
+
+
+  //     transactionid = result;
+
+  //     if (!transactionid) {
+  //       throw new Error('Failed to create transaction');
+  //     }
+
+  //     folderPath = `uploads/transaction/${transactionid}`;
+  //     await fs.promises.mkdir(folderPath, { recursive: true });
+
+  //     const paymentProof = await this.saveTransactionFile(
+  //       paymentProofFile,
+  //       transactionid,
+  //       'payment_proof',
+  //       folderPath,
+  //     );
+
+  //     // update path outside transaction
+  //     await this.transactionrepo.updateTransactionFile(
+  //       transactionid,
+  //       {
+  //         payment_proof_path: paymentProof.dbPath,
+  //       },
+  //     );
+
+  //     return {
+  //       success: true,
+  //       message: 'Transaction completed successfully',
+  //       transaction_id: transactionid,
+  //     };
+
+  //   }
+  //   catch (error) {
+  //     console.error("error is", error);
+
+  //     // delete folder
+  //     if (folderPath && fs.existsSync(folderPath)) {
+  //       await fs.promises.rm(folderPath, {
+  //         recursive: true,
+  //         force: true
+  //       });
+  //     }
+
+  //     throw error;
+  //   }
+  // }
+
+
+  // ==============================
+  // FILE SAVE METHOD
+  // ==============================
+
+
+  // ============================================
+  // CREATE TRANSACTION (Updated Proper Version)
+  // Loan amounts stay unchanged
+  // Remaining balance comes from last transaction
+  // ============================================
+
+  async createTransaction(
+    dto: any,
+    paymentProofFile: Express.Multer.File | undefined,
+    userId: number,
+    companyId: number,
+  ) {
+    let folderPath: string | null = null;
+    let transactionId: number | null = null;
+
+    try {
+      dto.company_id = companyId;
+
+      // =====================================
+      // STEP 1 FETCH LOAN
+      // =====================================
+      const loan = await this.transactionrepo.getLoanById(dto.loan_id);
+
+      if (!loan) {
+        throw new BadRequestException('Loan not found');
+      }
+
+      // =====================================
+      // STEP 2 FETCH LAST TRANSACTION
+      // =====================================
+      const lastTxn =
+        await this.transactionrepo.getLastTransaction(dto.loan_id);
+
+      // =====================================
+      // STEP 3 OPENING BALANCE
+      // =====================================
+      let principalBalance = lastTxn
+        ? Number(lastTxn.principal_balance)
+        : Number(loan.principal_amount);
+
+      let interestBalance = lastTxn
+        ? Number(lastTxn.interest_balance)
+        : Number(loan.interest_amount);
+
+      let overdueBalance = lastTxn
+        ? Number(lastTxn.overdue_balance)
+        : Number(loan.overdue_amount || 0);
+
+      let principalPaid = 0;
+      let interestPaid = 0;
+      let overduePaid = 0;
+      let topupAmount = 0;
+
+      const totalPaid = Number(dto.paid_amount || 0);
+
+      // =====================================
+      // STEP 4 TRANSACTION TYPE LOGIC
+      // =====================================
+      switch (dto.transaction_type) {
+        case 'LOAN_AMOUNT_ONLY':
+          principalPaid = Number(dto.principal_paid || 0);
+
+          if (principalPaid > principalBalance) {
+            throw new BadRequestException(
+              'Principal exceeds balance',
+            );
+          }
+
+          principalBalance -= principalPaid;
+          break;
+
+        case 'INTEREST_ONLY':
+          interestPaid = Number(dto.interest_paid || 0);
+
+          if (interestPaid > interestBalance) {
+            throw new BadRequestException(
+              'Interest exceeds balance',
+            );
+          }
+
+          interestBalance -= interestPaid;
+          break;
+
+        case 'LOAN_PLUS_INTEREST':
+          principalPaid = Number(dto.principal_paid || 0);
+          interestPaid = Number(dto.interest_paid || 0);
+          overduePaid = Number(dto.overdue_paid || 0);
+
+          if (principalPaid > principalBalance) {
+            throw new BadRequestException(
+              'Principal exceeds balance',
+            );
+          }
+
+          if (interestPaid > interestBalance) {
+            throw new BadRequestException(
+              'Interest exceeds balance',
+            );
+          }
+
+          if (overduePaid > overdueBalance) {
+            throw new BadRequestException(
+              'Overdue exceeds balance',
+            );
+          }
+
+          principalBalance -= principalPaid;
+          interestBalance -= interestPaid;
+          overdueBalance -= overduePaid;
+          break;
+
+        case 'TOPUP':
+          topupAmount = totalPaid;
+
+          // topup adds principal outstanding
+          principalBalance += topupAmount;
+          break;
+
+        default:
           throw new BadRequestException(
-            'Principal exceeds balance',
+            'Invalid transaction type',
           );
-        }
+      }
 
-        principalBalance -=
-          principalPaid;
+      const totalBalance =
+        principalBalance +
+        interestBalance +
+        overdueBalance;
 
-        break;
+      let loanStatus = 'active';
 
+      if (Number(totalBalance).toFixed(2) === '0.00') {
+        loanStatus = 'close';
+      }
 
-      // -----------------------
-      // INTEREST ONLY
-      // -----------------------
-      case 'INTEREST_ONLY':
+      // =====================================
+      // STEP 5 INSERT TRANSACTION ONLY
+      // =====================================
+      const result =
+        await this.db.transaction(async (conn) => {
+          dto.receipt_no = await this.transactionrepo.generateNumber(companyId, "TRANSACTION", conn);
 
-        interestPaid =
-          Number(
-            dto.interest_paid || 0,
+          const insertResult =
+            await this.transactionrepo.insertTransaction(
+              {
+                ...dto,
+                client_id: loan.client_id,
+                loan_id: dto.loan_id,
+
+                principal_paid: principalPaid,
+                interest_paid: interestPaid,
+                overdue_paid: overduePaid,
+                topup_amount: topupAmount,
+
+                principal_balance: principalBalance,
+                interest_balance: interestBalance,
+                overdue_balance: overdueBalance,
+                total_balance: totalBalance,
+
+                created_by: userId,
+              },
+              conn,
+            );
+
+          console.log('insertResult is', insertResult)
+          const insertId =
+            insertResult.insertId;
+
+          console.log('inser id1 is', insertId);
+
+          console.log("insert id in transaction is", insertId);
+
+          // only update status in loan table
+          await this.transactionrepo.updateLoanBalance(
+            dto.loan_id,
+            { loan_status: loanStatus },
+            conn,
           );
 
-        if (
-          interestPaid >
-          interestBalance
-        ) {
-          throw new BadRequestException(
-            'Interest exceeds balance',
-          );
-        }
+             // -------------------------------------
+        // Ledger Entry 1
+        // DR Loan Receivable
+        // -------------------------------------
 
-        interestBalance -=
-          interestPaid;
-
-        break;
-
-
-      // -----------------------
-      // PRINCIPAL + INTEREST + OVERDUE
-      // -----------------------
-      case 'LOAN_PLUS_INTEREST':
-
-        principalPaid =
-          Number(
-            dto.principal_paid || 0,
+          await this.transactionrepo.insertLedger(
+            {
+              transaction_id: insertId,
+              loan_id: dto.loan_id,
+              client_id: loan.client_id,
+              company_id: companyId,
+              credit: 0,
+              debit: dto.paid_amount,
+              entry_type:dto.transaction_type,
+              status:"debit",
+              type:"loan"
+            },
+            conn
           );
 
-        interestPaid =
-          Number(
-            dto.interest_paid || 0,
+          // -------------------------------------
+          // Ledger Entry 2
+          // CR Selected Account
+          // -------------------------------------
+          await this.transactionrepo.insertLedger(
+            {
+              transaction_id: insertId,
+              loan_id: dto.loan_id,
+              client_id: loan.client_id,
+              company_id: companyId,
+              account_id: dto.account_type,
+              debit:0,
+              credit: dto.paid_amount,
+              entry_type: dto.transaction_type,
+              status:"credit",
+              type:"account"
+            },
+            conn
           );
 
-        overduePaid =
-          Number(
-            dto.overdue_paid || 0,
-          );
+          return insertId;
+        });
 
-        if (
-          principalPaid >
-          principalBalance
-        ) {
-          throw new BadRequestException(
-            'Principal exceeds balance',
-          );
-        }
-
-        if (
-          interestPaid >
-          interestBalance
-        ) {
-          throw new BadRequestException(
-            'Interest exceeds balance',
-          );
-        }
-
-        if (
-          overduePaid >
-          overdueBalance
-        ) {
-          throw new BadRequestException(
-            'Overdue exceeds balance',
-          );
-        }
-
-        principalBalance -=
-          principalPaid;
-
-        interestBalance -=
-          interestPaid;
-
-        overdueBalance -=
-          overduePaid;
-
-        break;
+      console.log("result is", result);
+      transactionId = result;
 
 
-      // -----------------------
-      // TOPUP
-      // -----------------------
-      case 'TOPUP':
-
-        topupAmount =
-          totalPaid;
-
-        principalBalance +=
-          topupAmount;
-
-        break;
-
-      default:
-        throw new BadRequestException(
-          'Invalid transaction type',
+      if (!transactionId) {
+        throw new Error(
+          'Failed to create transaction',
         );
-    }
+      }
 
-    const totalBalance =
-      principalBalance +
-      interestBalance +
-      overdueBalance;
+      // =====================================
+      // STEP 6 FILE SAVE OUTSIDE TRANSACTION
+      // =====================================
+      folderPath =
+        `uploads/transaction/${transactionId}`;
 
-    let loanStatus = loan.loan_status;
+      await fs.promises.mkdir(folderPath, {
+        recursive: true,
+      });
 
-    if (Number(totalBalance).toFixed(2) === '0.00') {
-      loanStatus = 'close';
-    }
+      const paymentProof =
+        await this.saveTransactionFile(
+          paymentProofFile,
+          transactionId,
+          'payment_proof',
+          folderPath,
+        );
 
-    // STEP 3 Short transaction only
-    return this.db.transaction(async (conn) => {
-
-      await this.transactionrepo.insertTransaction(
+      await this.transactionrepo.updateTransactionFile(
+        transactionId,
         {
-          ...dto,
-          client_id: loan.client_id,
-          loan_id: dto.loan_id,
-
-          principal_paid: principalPaid,
-          interest_paid: interestPaid,
-          overdue_paid: overduePaid,
-          topup_amount: topupAmount,
-
-          principal_balance: principalBalance,
-          interest_balance: interestBalance,
-          overdue_balance: overdueBalance,
-          total_balance: totalBalance,
-
-          created_by: userId
+          payment_proof_path:
+            paymentProof.dbPath,
         },
-        conn
       );
-
-      // ==========================
-      // STEP 4 : UPDATE LOAN
-      // ==========================
-      await this.transactionrepo.updateLoanBalance(
-        dto.loan_id,
-        {
-          principal_amount:
-            principalBalance,
-
-          interest_amount:
-            interestBalance,
-
-          total_amount:
-            totalBalance,
-
-          loan_status:
-            loanStatus,
-        },
-        conn,
-      );
-
 
       return {
         success: true,
-        message: 'Transaction completed succesfully',
+        message:
+          'Transaction completed successfully',
+        transaction_id: transactionId,
       };
-    });
+    } catch (error) {
+      // cleanup files
+      if (folderPath && fs.existsSync(folderPath)) {
+        await fs.promises.rm(folderPath, {
+          recursive: true,
+          force: true,
+        });
+      }
+
+      throw error;
+    }
   }
+
+
+  private async saveTransactionFile(
+    file: Express.Multer.File | undefined,
+    transactionId: number,
+    prefix: string,
+    folderPath: string,
+  ): Promise<{ dbPath: string | null; filePath: string | null }> {
+    if (!file) {
+      return {
+        dbPath: null,
+        filePath: null,
+      };
+    }
+
+    const allowedTypes = ['.jpg', '.jpeg', '.png', '.pdf'];
+
+    const ext = path.extname(file.originalname).toLowerCase();
+
+    if (!allowedTypes.includes(ext)) {
+      throw new BadRequestException('Invalid file type');
+    }
+
+    const fileName = `${prefix}_${transactionId}_${uuidv4()}${ext}`;
+
+    const filePath = path.join(folderPath, fileName);
+
+    const dbPath = `/${folderPath}/${fileName}`;
+
+    await fs.promises.writeFile(filePath, file.buffer);
+
+    return {
+      dbPath,
+      filePath,
+    };
+  }
+
 
 
   async getLoanById(loanId: number) {
@@ -378,6 +750,7 @@ export class TransactionsService {
 
 
   async getClientLoans(clientId: number, companyId: number) {
+
     try {
       const rows = await this.transactionrepo.getClientLoans(clientId, companyId);
 
@@ -453,7 +826,7 @@ export class TransactionsService {
             loan_status: row.loan_status,
             loan_start_date: row.loan_start_date,
             loan_due_date: row.due_date,
-            mortgaged_items: []
+            // mortgaged_items: []
           };
 
           if (row.transaction_type === "INTEREST_ONLY") {
@@ -472,16 +845,16 @@ export class TransactionsService {
           acc.push(receipt);
         }
 
-        if (row.gold_item_id) {
-          receipt.mortgaged_items.push({
-            gold_item_id: row.gold_item_id,
-            category: row.category,
-            morgaged_note: row.morgaged_note,
-            gorss_weight: row.gross_weight,
-            net_weight: row.net_weight,
-            total_weight: row.total_weight
-          });
-        }
+        // if (row.gold_item_id) {
+        //   receipt.mortgaged_items.push({
+        //     gold_item_id: row.gold_item_id,
+        //     category: row.category,
+        //     morgaged_note: row.morgaged_note,
+        //     gorss_weight: row.gross_weight,
+        //     net_weight: row.net_weight,
+        //     total_weight: row.total_weight
+        //   });
+        // }
 
         return acc;
       }, []);

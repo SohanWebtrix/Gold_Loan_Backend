@@ -2,7 +2,7 @@
 /dist
 /node_modules
 /build
-/uploads
+# /uploads
 
 # Logs
 logs
@@ -12,6 +12,10 @@ pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
+
+# Keep folder but ignore actual image files
+uploads/*
+!uploads/.gitkeep
 
 # OS
 .DS_Store

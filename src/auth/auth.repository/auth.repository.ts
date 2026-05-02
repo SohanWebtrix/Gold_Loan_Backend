@@ -36,8 +36,37 @@ export type LoginUserType = {
     cust_name: string;
     cust_password: string;
     status: string; // or 'active' | 'inactive' if you know values
+    role:string;
+    profile_pic_path:string;
+
 };
 
+export type CustomerWithCompany = {
+    customer_id: number;
+    comp_id: number;
+    first_name: string | null;
+    last_name: string | null;
+    status: number | string | null;
+    address_line1: string | null;
+    address_line2: string | null;
+    state: string | null;
+    city: string | null;
+    pincode: string | null;
+    cust_phone: string | number | null;
+    cust_email: string | null;
+    user_name: string | null;
+    company_id: number;
+    company_name: string | null;
+    company_email: string | null;
+    company_mobile: string | null;
+};
+
+export type PrefixItem = {
+    module: string;
+    prefix: string;
+    year: string | number;
+    document_no: string | number;
+};
 
 @Injectable()
 
@@ -59,6 +88,200 @@ export class AuthRepository {
 
 
     // REPOSITORY
+
+    async insertprefixbulk(
+        prefix: any[],
+        comapny_id: number) {
+
+
+        try {
+            if (!prefix?.length) return;
+
+            const values = prefix.map((item) => [
+                comapny_id,
+                item.module,
+                item.prefix,
+                item.year,
+                item.document_no,
+            ]);
+
+            const sql = `
+          INSERT INTO prefix_table (
+            company_id,
+            doc_type,
+            prefix,
+            year,
+            last_no
+          )
+          VALUES ?
+        `;
+
+            const result = await this.db.bulkQuery(sql, [values]);
+
+            return result;
+
+        } catch (error: any) {
+
+
+            console.error(
+                "❌ insertPrefix Bulk DB error:",
+                error,
+            );
+
+            throw new InternalServerErrorException(
+                "Failed to insert prefix",
+            );
+        }
+    }
+
+      async insertprefixbulku(
+        prefix: any[],
+        comapny_id: number,
+    conn:any) {
+
+                const db = conn ?? this.db;
+
+
+        try {
+            if (!prefix?.length) return;
+
+            const values = prefix.map((item) => [
+                comapny_id,
+                item.module,
+                item.prefix,
+                item.year,
+                item.document_no,
+            ]);
+
+            const sql = `
+          INSERT INTO prefix_table (
+            company_id,
+            doc_type,
+            prefix,
+            year,
+            last_no
+          )
+          VALUES ?
+        `;
+
+            const [result] = await db.query(sql, [values]);
+
+            return result;
+
+        } catch (error: any) {
+
+
+            console.error(
+                "❌ insertPrefix Bulk DB error:",
+                error,
+            );
+
+            throw new InternalServerErrorException(
+                "Failed to insert prefix",
+            );
+        }
+    }
+
+
+    async deletePrefixes(company_id: number, conn?: any) {
+        const db = conn ?? this.db;
+
+        try {
+            const result = await db.query(
+                `DELETE FROM prefix_table WHERE company_id = ?`,
+                [company_id],
+            );
+            return result;
+        } catch (error: any) {
+            console.error('deletePrefixes error', error);
+            throw new InternalServerErrorException('Failed to delete prefixes');
+        }
+    }
+
+    async updateCompany(companyId: number, data: any, userId: number, conn?: any) {
+        const db = conn ?? this.db;
+
+        try {
+            const fields: string[] = [];
+            const values: any[] = [];
+
+            const companyFields = {
+                company_name: data.company_name,
+                company_email: data.company_email,
+                company_mobile: data.company_mobile,
+            };
+
+            Object.entries(companyFields).forEach(([key, value]) => {
+                if (value !== undefined) {
+                    fields.push(`${key} = ?`);
+                    values.push(value);
+                }
+            });
+
+            if (fields.length === 0) return;
+
+            fields.push('modified_by = ?');
+            values.push(userId);
+            fields.push('modified_date = ?');
+            values.push(this.formatDateForDB(new Date()));
+
+            const sql = `UPDATE company SET ${fields.join(', ')} WHERE company_id = ?`;
+            await db.query(sql, [...values, companyId]);
+        } catch (error: any) {
+            console.error('updateCompany error', error);
+            throw error;
+        }
+    }
+
+    async updateCustomer(customerId: number, data: any, userId: number, conn?: any) {
+        const db = conn ?? this.db;
+
+        try {
+            const fields: string[] = [];
+            const values: any[] = [];
+
+            const customerFields: any = {
+                first_name: data.first_name,
+                last_name: data.last_name,
+                status: data.status,
+                address_line1: data.address_line1,
+                address_line2: data.address_line2,
+                state: data.state,
+                city: data.city,
+                pincode: data.pincode,
+                cust_phone: data.cust_phone,
+                cust_email: data.cust_email,
+                user_name: data.username,
+            };
+
+            Object.entries(customerFields).forEach(([key, value]) => {
+                if (value !== undefined) {
+                    fields.push(`${key} = ?`);
+                    values.push(value);
+                }
+            });
+
+            if (data.cust_password) {
+                const hashedPassword = await bcrypt.hash(data.cust_password, 10);
+                fields.push('cust_password = ?');
+                values.push(hashedPassword);
+            }
+
+            if (fields.length === 0) return;
+
+            fields.push('modified_by = ?');
+            values.push(userId);
+            fields.push('modified_date = ?');
+            values.push(this.formatDateForDB(new Date()));
+
+            const sql = `UPDATE customers SET ${fields.join(', ')} WHERE customer_id = ?`;
+            await db.query(sql, [...values, customerId]);
+        } catch (error: any) {
+            console.error('updateCustomer error', error);
+            throw error;
+        }
+    }
+
 
     async insertAdmin(data: any) {
 
@@ -217,6 +440,43 @@ export class AuthRepository {
 
 
 
+    async findCustomerWithCompany(customerId: number): Promise<CustomerWithCompany | null> {
+        const rows = await this.db.query<CustomerWithCompany[]>(
+            `
+      SELECT
+        cu.*,
+        co.company_id AS company_id,
+        co.company_name,
+        co.company_email,
+        co.company_mobile
+      FROM customers cu
+      JOIN company co ON cu.comp_id = co.company_id
+      WHERE cu.customer_id = ?
+      LIMIT 1
+      `,
+            [customerId],
+        );
+
+        return rows[0] || null;
+    }
+
+    async getPrefixesByCompany(companyId: number): Promise<PrefixItem[]> {
+        const rows = await this.db.query<PrefixItem[]>(
+            `
+      SELECT
+        doc_type AS module,
+        prefix,
+        year,
+        last_no AS document_no
+      FROM prefix_table
+      WHERE company_id = ?
+      `,
+            [companyId],
+        );
+
+        return rows;
+    }
+
     async isTokenBlacklisted(token: string): Promise<boolean> {
 
         if (!token) {
@@ -238,7 +498,7 @@ export class AuthRepository {
 
         const rows = await this.db.query<LoginUserType[]>(
             `
-  SELECT customer_id,comp_id, cust_name, cust_email, cust_password,status,cust_phone 
+  SELECT customer_id,comp_id, cust_name, cust_email, cust_password,status,cust_phone,role,profile_pic_path
   FROM customers 
   WHERE (cust_phone = ? OR user_name = ?) 
   LIMIT 1

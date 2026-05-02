@@ -3,10 +3,10 @@
 
 import { BadRequestException, HttpException, HttpStatus, Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
 import { AuthRepository } from './auth.repository/auth.repository';
-import { AuthDto } from './auth.dto';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { MailService } from 'src/mail/mail.service';
+import { DatabaseService } from 'src/database/database.service';
 
 
 @Injectable()
@@ -15,12 +15,13 @@ export class AuthService {
     constructor(
         private jwtService: JwtService,
         private readonly authRepo: AuthRepository,
+        private readonly db: DatabaseService,
         private mailService: MailService,
     ) {
 
     }
 
-    async generateTokens(user) {
+    async generateTokens(user: { id: number; email: string }) {
 
         console.log("generatetoken called ")
         const accessToken = this.jwtService.sign(
@@ -57,6 +58,11 @@ async CreateUser(dto: any, userId: number) {
             company_id
         );
 
+        const insertPrefix = await this.authRepo.insertprefixbulk(
+            dto.prefix,
+            company_id
+        );
+
         // 3️⃣ Success check
         if (customerResult && customerResult.affectedRows === 1) {
             return {
@@ -74,7 +80,84 @@ async CreateUser(dto: any, userId: number) {
     }
 }
 
-       async CreateAdmin(dto: any) {
+  async UpdateCustomer(dto: any,customerIdNumber:number, userId: number) {
+    try {
+      const companyId = Number(dto.company_id);
+
+      if (!companyId || !customerIdNumber) {
+        throw new BadRequestException('company_id is required');
+      }
+
+         if (!customerIdNumber) {
+        throw new BadRequestException('customer_id are required');
+      }
+
+      await this.db.transaction(async (conn) => {
+        // Update company fields when present
+        await this.authRepo.updateCompany(companyId, dto, userId, conn);
+
+        // Update customer fields when present
+        await this.authRepo.updateCustomer(customerIdNumber, dto, userId, conn);
+
+        // Sync prefix records if prefix array is provided
+        if (Array.isArray(dto.prefix)) {
+          await this.authRepo.deletePrefixes(companyId, conn);
+          await this.authRepo.insertprefixbulku(dto.prefix, companyId, conn);
+        }
+      });
+
+      return {
+        success: true,
+        message: 'Customer updated successfully',
+        companyId,
+        customerIdNumber,
+      };
+    } catch (error) {
+      console.error('UpdateCustomer error', error);
+      throw error;
+    }
+  }
+
+  async getCustomerDetails(customerId: number, headerCompId?: number) {
+    if (!customerId || Number.isNaN(customerId)) {
+      throw new BadRequestException('customer_id is required');
+    }
+
+    const customer = await this.authRepo.findCustomerWithCompany(customerId);
+    if (!customer) {
+      throw new BadRequestException('Customer not found');
+    }
+
+    const prefixCompanyId = headerCompId || customer.comp_id;
+    const prefixes = await this.authRepo.getPrefixesByCompany(prefixCompanyId);
+
+    return {
+      customer: {
+        customer_id: customer.customer_id,
+        comp_id: customer.comp_id,
+        first_name: customer.first_name,
+        last_name: customer.last_name,
+        status: customer.status,
+        address_line1: customer.address_line1,
+        address_line2: customer.address_line2,
+        state: customer.state,
+        city: customer.city,
+        pincode: customer.pincode,
+        cust_phone: customer.cust_phone,
+        cust_email: customer.cust_email,
+        user_name: customer.user_name,
+      },
+      company: {
+        company_id: customer.company_id,
+        company_name: customer.company_name,
+        company_email: customer.company_email,
+        company_mobile: customer.company_mobile,
+      },
+      prefixes,
+    };
+  }
+
+  async CreateAdmin(dto: any) {
 
         try {
             const result: any = await this.authRepo.insertAdmin(dto);
@@ -136,6 +219,8 @@ async CreateUser(dto: any, userId: number) {
                 name: user.cust_name,
                 comp_id:user.comp_id,
                 mobile_no:user.cust_phone,
+                role:user.role,
+                profile_path:user.profile_pic_path
             },
         };
     }

@@ -7,8 +7,9 @@ import { DatabaseService } from 'src/database/database.service';
 export class LoanCronService {
     constructor(private readonly db: DatabaseService) { }
 
-    @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
-    async markOverdueLoans() {
+    @Cron(CronExpression.EVERY_HOUR) async markOverdueLoans() {
+        console.log('Cron running...');
+
         await this.db.query(`
       UPDATE loans
       SET loan_status = 'overdue'
@@ -16,7 +17,6 @@ export class LoanCronService {
       AND loan_status = 'active'
     `);
 
-        console.log('Overdue loans updated');
     }
 }
 

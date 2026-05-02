@@ -14,10 +14,10 @@ import * as Sentry from '@sentry/node';
 
 @Injectable()
 export class ClientRepository {
-    constructor(private readonly db: DatabaseService) {}
+    constructor(private readonly db: DatabaseService) { }
 
-      async getSearchClients(search: string, companyid: number) {
-        
+    async getSearchClients(search: string, companyid: number) {
+
         try {
             const rows: any = await this.db.query(
                 `
@@ -83,7 +83,7 @@ export class ClientRepository {
     async getUsersByid(userid: number) {
         try {
             const rows = await this.db.query(
-                'SELECT * FROM clients WHERE cl_id = ? LIMIT 1',
+                `SELECT cl.*,st.state_name AS state_name FROM clients cl LEFT JOIN ab_states st ON cl.state = st.state_id WHERE cl_id = ? LIMIT 1`,
                 [userid]
             );
             return rows;
@@ -149,12 +149,12 @@ export class ClientRepository {
         }
     }
 
-    async searchCities(search?: string,stateId?:number) {
+    async searchCities(search?: string, stateId?: number) {
         try {
             if (search && search.trim().length) {
                 return await this.db.query(
                     'SELECT * FROM ab_cities WHERE city_name LIKE ? AND state_id=?',
-                    [`%${search.trim()}%`,stateId],
+                    [`%${search.trim()}%`, stateId],
                 );
             }
 
@@ -261,7 +261,10 @@ export class ClientRepository {
     }
 
 
-    async insertClient(data: any, userId: number) {
+    async insertClient(data: any, userId: number, conn: any) {
+        const db = conn ?? this.db;
+
+
         try {
             const payload: any = { ...data, created_by: userId };
 
@@ -286,7 +289,7 @@ export class ClientRepository {
             const placeholders = Object.keys(payload).map(() => "?").join(", ");
             const values = Object.values(payload);
 
-            return await this.db.query<ResultSetHeader>(
+            return await db.query(
                 `INSERT INTO clients (${columns}) VALUES (${placeholders})`,
                 values
             );
@@ -532,6 +535,7 @@ export class ClientRepository {
     }
 
     async getFilteredCount(filters: any[], userid: number) {
+        
         try {
             const where: string[] = ['cl.compc_id=?'];
             const values: any[] = [userid];
@@ -687,13 +691,21 @@ export class ClientRepository {
             a.cust_name AS created_by_name,
         a2.cust_name AS modified_by_name,
          ct.city_name AS city_name,
-        st.state_name AS state_name
+        st.state_name AS state_name,
+         COUNT(CASE WHEN l.loan_status = 'active' THEN 1 END) AS active_loans,
+            COUNT(CASE WHEN l.loan_status = 'close' THEN 1 END) AS closed_loans,
+            COUNT(CASE WHEN l.loan_status = 'overdue' THEN 1 END) AS overdue_loans,
+                     -- Total Loan Amount
+            COALESCE(SUM(l.total_amount), 0) AS total_loan_amount
+
         FROM clients cl
            LEFT JOIN customers a ON cl.created_by = a.customer_id
       LEFT JOIN customers a2 ON cl.modified_by = a2.customer_id
        LEFT JOIN ab_cities ct ON cl.city = ct.city_id
       LEFT JOIN ab_states st ON cl.state = st.state_id
+     LEFT JOIN loans l ON l.client_id = cl.cl_id
         ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+        GROUP BY cl.cl_id
         ORDER BY cl.cl_id DESC
         LIMIT ${safeLimit} OFFSET ${safeOffset}
       `;
@@ -723,7 +735,6 @@ export class ClientRepository {
       SELECT cl.*,
       a.cust_name AS created_by_name,
         a2.cust_name AS modified_by_name,
-        ct.city_name AS city_name,
         st.state_name AS state_name,
 
             COUNT(CASE WHEN l.loan_status = 'active' THEN 1 END) AS active_loans,
@@ -731,19 +742,14 @@ export class ClientRepository {
             COUNT(CASE WHEN l.loan_status = 'overdue' THEN 1 END) AS overdue_loans,
                      -- Total Loan Amount
             COALESCE(SUM(l.total_amount), 0) AS total_loan_amount
-
-
       FROM clients cl
-       LEFT JOIN customers a ON cl.created_by = a.customer_id
+      LEFT JOIN customers a ON cl.created_by = a.customer_id
       LEFT JOIN customers a2 ON cl.modified_by = a2.customer_id
-      LEFT JOIN ab_cities ct ON cl.city = ct.city_id
       LEFT JOIN ab_states st ON cl.state = st.state_id
       LEFT JOIN loans l 
       ON l.client_id = cl.cl_id
-
       WHERE cl.compc_id=${userid}
-        GROUP BY cl.cl_id
-
+      GROUP BY cl.cl_id
       ORDER BY cl_id DESC
       LIMIT ${safeLimit} OFFSET ${safeOffset}
     `;
@@ -763,8 +769,17 @@ export class ClientRepository {
     async deletClientId(cid: number) {
         try {
             const rows = await this.db.query(
-                'update clients set status = ? where cl_id = ? LIMIT 1',
-                ['inactive', cid]
+                `UPDATE clients
+  SET status = ?
+  WHERE cl_id = ?
+  AND NOT EXISTS (
+      SELECT 1
+      FROM loans
+      WHERE client_id = ?
+      AND loan_status <> 'close'
+  )
+  LIMIT 1`,
+                ['inactive', cid, cid]
             );
             return rows;
         }
@@ -774,4 +789,50 @@ export class ClientRepository {
             console.error("delete by id error is", error)
         }
     }
+
+
+    async generateNumber(companyId: number, docType: string, conn?: any): Promise<string> {
+        const db = conn ?? this.db;
+
+
+        try {
+            const [rows]: any = await db.query(
+                `
+      SELECT *
+      FROM prefix_table
+      WHERE company_id = ?
+      AND doc_type = ?
+      FOR UPDATE
+      `,
+                [companyId, docType]
+            );
+
+            if (rows.length === 0) {
+                throw new Error("Sequence configuration not found");
+            }
+
+            const row = rows[0];
+
+            const nextNo = row.last_no + 1;
+
+            await db.query(
+                `
+      UPDATE prefix_table
+      SET last_no = ?
+      WHERE id = ?
+      `,
+                [nextNo, row.id]
+            );
+
+            return `${row.prefix}-${row.year}-${nextNo}`;
+
+        }
+        catch (error) {
+            console.error("db error is", error)
+
+            throw error;
+        }
+
+    }
+
 }

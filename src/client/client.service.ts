@@ -12,12 +12,14 @@ import { error } from 'console';
 import { randomBytes } from "crypto";
 import { CLIENT_FILTER_SCHEMA } from './client.filter.schema';
 import { CustomersRepository } from 'src/customers/customers.repository/customers.repository';
+import { DatabaseService } from 'src/database/database.service';
 
 
 @Injectable()
 export class ClientService {
 
-  constructor(private readonly clientRepo: ClientRepository, private readonly customerRepo: CustomersRepository
+  constructor(private readonly clientRepo: ClientRepository, private readonly customerRepo: CustomersRepository, private readonly db: DatabaseService,
+
   ) {
 
   }
@@ -147,10 +149,10 @@ export class ClientService {
     }
   }
 
-  async searchCities(search?: string, stateId?:number) {
+  async searchCities(search?: string, stateId?: number) {
     try {
 
-      const data = await this.clientRepo.searchCities(search,stateId);
+      const data = await this.clientRepo.searchCities(search, stateId);
 
       return {
         success: true,
@@ -314,20 +316,22 @@ export class ClientService {
 
     try {
 
+
+
       // ✅ STEP 1: Insert client FIRST (without file paths)
-      dto.client_code = this.generateClientCode();
-      dto.compc_id = companyIdNum;
+      const result = await this.db.transaction(async (conn) => {
+        const code = await this.clientRepo.generateNumber(companyIdNum, "CLIENT", conn);
 
-      const result = await this.clientRepo.insertClient(
-        dto
-        , userId);
+        dto.client_code = code;
+        dto.compc_id = companyIdNum;
 
-      if (!result || result.affectedRows !== 1) {
-        throw new Error("Client insert failed");
-      }
+        return await this.clientRepo.insertClient(dto, userId, conn);
+      });
 
+
+      console.log("result is",result);
       // ✅ STEP 2: Get client ID
-      cid = result.insertId;
+      cid = result[0].insertId;
 
       if (!cid) {
         throw new Error("faild to get client id");

@@ -1,7 +1,8 @@
 /* eslint-disable prettier/prettier */
-import { Body, Controller, Get, Headers, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, ParseIntPipe, Post, Query, Req, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { TransactionsService } from './transactions.service';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 
 @Controller('transactions')
 export class TransactionsController {
@@ -23,7 +24,6 @@ export class TransactionsController {
         const userid = req.user.userId;
                 const companyIdNum = Number(companyId);
 
-
         return this.transactionService.getTransactionList(
             Number(page),
             Number(limit),
@@ -35,16 +35,25 @@ export class TransactionsController {
 
     @Post('create_transaction')
     @UseGuards(AuthGuard('jwt'))
+    @UseInterceptors(FileFieldsInterceptor([
+        {name:'payment_proof_file',maxCount:1}])
+    )
     async CreateTransaction(@Body() dto: any,
         @Headers('comp-id') companyId: string,
         @Req() req: any,
+          @UploadedFiles()
+                files: {
+                    payment_proof_file?: Express.Multer.File[];
+                },
     ) {
+        const paymentproof=files?.payment_proof_file?.[0];
         const companyIdNum = Number(companyId);
-        console.log("company Id is", companyIdNum)
+        console.log("company Id is", companyIdNum);
         const userId = req.user.userId;
 
         return this.transactionService.createTransaction(
             dto,
+            paymentproof,
             userId,
             companyIdNum,
         );

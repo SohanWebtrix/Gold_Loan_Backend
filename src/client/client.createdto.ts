@@ -117,10 +117,9 @@ export class CreateClientDto {
   @IsNumber()
   state?: number;
 
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  city?: number;
+ @IsOptional()
+  @IsString()
+  city?: string;
 
 
   @IsOptional()

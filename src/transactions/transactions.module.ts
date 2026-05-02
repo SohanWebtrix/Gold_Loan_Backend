@@ -8,6 +8,7 @@ import { TransactionRepository } from './transaction.repository/transaction.repo
 @Module({
     imports: [DatabaseModule],
   controllers: [TransactionsController],
-  providers: [TransactionsService, TransactionRepository]
+  providers: [TransactionsService, TransactionRepository],
+  exports:[TransactionRepository]
 })
 export class TransactionsModule {}

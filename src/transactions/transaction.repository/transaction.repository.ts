@@ -1,4 +1,5 @@
 import { Injectable, InternalServerErrorException } from "@nestjs/common";
+import { ResultSetHeader } from "mysql2";
 import { DatabaseService } from "src/database/database.service";
 import { OPERATOR_SQL } from "src/filter/operator.map";
 
@@ -9,6 +10,48 @@ export class TransactionRepository {
     constructor(private readonly db: DatabaseService) {
 
     }
+
+     async insertLedger(
+            data: any,
+            conn:any,
+        ) {
+                    const db = conn ?? this.db;
+    
+            try {
+    
+                const payload: any = {
+                    ...data,
+                };
+    
+    
+                Object.keys(payload).forEach(key => {
+                    if (payload[key] === undefined) {
+                        payload[key] = null;
+                    }
+                });
+    
+                const columns = Object.keys(payload).join(", ");
+                const placeholders = Object.keys(payload).map(() => "?").join(", ");
+                const values = Object.values(payload);
+    
+                const [result] = await db.query(
+                    `INSERT INTO ledger_entries (${columns}) VALUES (${placeholders})`,
+                    values
+                );
+    
+                return result;
+    
+            } catch (error: any) {
+    
+                console.error("❌ fail to insert ledure DB error:", error);
+    
+                throw new InternalServerErrorException(
+                    "Failed to insert ledure"
+                );
+            }
+        }
+
+
 
     async getLoanDetails(loanId: number) {
         try {
@@ -50,6 +93,49 @@ LIMIT 1
             throw new InternalServerErrorException(
                 'Failed to fetch loan details'
             );
+        }
+    }
+
+    async generateNumber(companyId: number, docType: string, conn?: any): Promise<string> {
+
+        const db = conn ?? this.db;
+
+
+        try {
+            const [rows]: any = await db.query(
+                `
+      SELECT *
+      FROM prefix_table
+      WHERE company_id = ?
+      AND doc_type = ?
+      FOR UPDATE
+      `,
+                [companyId, docType]
+            );
+
+            if (rows.length === 0) {
+                throw new Error("Sequence configuration not found");
+            }
+
+            const row = rows[0];
+
+            const nextNo = row.last_no + 1;
+
+            await db.query(
+                `
+      UPDATE prefix_table
+      SET last_no = ?
+      WHERE id = ?
+      `,
+                [nextNo, row.id]
+            );
+
+            return `${row.prefix}-${row.year}-${nextNo}`;
+
+        }
+        catch (error) {
+            console.error("db error is", error)
+            throw error;
         }
     }
 
@@ -310,7 +396,41 @@ LIMIT 1
         }
     }
 
+    async updateTransactionFile(tid: number, files: any) {
+        try {
+            const fields: string[] = [];
+            const values: any[] = [];
 
+            Object.keys(files).forEach((key) => {
+                if (files[key] !== undefined) {
+                    fields.push(`${key} = ?`);
+                    values.push(files[key]);
+                }
+            });
+
+            if (fields.length === 0) {
+                return;
+            }
+
+            const sql = `
+             UPDATE loan_transactions
+              SET ${fields.join(', ')}
+              WHERE transaction_id  = ?
+            `;
+
+            values.push(tid);
+
+            const result = await this.db.query<ResultSetHeader>(sql, values);
+
+            return result;
+
+        } catch (error) {
+
+            console.error("UpdateFilepath error", error);
+            throw error;
+
+        }
+    }
 
     async insertTransaction(
         data: any,
@@ -362,6 +482,20 @@ LIMIT 1
         }
     }
 
+    async getLastTransaction(loanId: number) {
+        const rows = await this.db.query(
+            `
+      SELECT *
+      FROM loan_transactions
+      WHERE loan_id = ?
+      ORDER BY transaction_id DESC
+      LIMIT 1
+      `,
+            [loanId]
+        );
+
+        return rows.length ? rows[0] : null;
+    }
 
 
     async updateLoanBalance(
@@ -369,6 +503,7 @@ LIMIT 1
         dto: any,
         conn: any,
     ) {
+
         try {
 
             const db = conn ?? this.db;
@@ -432,7 +567,7 @@ LIMIT 1
     }
 
     async getSearchClient(search: string, companyid: number) {
-        
+
         try {
             const rows: any = await this.db.query(
                 `
@@ -441,6 +576,7 @@ LIMIT 1
                 CONCAT(first_name, ' ', last_name) AS full_name
             FROM clients
             WHERE compc_id = ?
+            AND status = 'active'
             AND (
                 first_name LIKE ?
                 OR last_name LIKE ?
@@ -465,30 +601,45 @@ LIMIT 1
     }
 
     async getClientLoans(clientId: number, companyId: number) {
-
+        
         try {
             const rows = await this.db.query(
                 `
-      SELECT
-        l.loan_id,
-        l.principal_amount,
-        l.interest_amount,
-        l.loan_status,
+SELECT
+    l.loan_id,
 
-        m.gold_item_id ,
-        m.category,
-        m.morgaged_note
+    COALESCE(lt.principal_balance, l.principal_amount) AS principal_amount,
+    COALESCE(lt.interest_balance, l.interest_amount) AS interest_amount,
 
-      FROM loans l
+    l.loan_status,
 
-      LEFT JOIN mortgaged_items m
-        ON l.loan_id = m.loan_id
+    m.gold_item_id,
+    m.category,
+    m.morgaged_note
 
-      WHERE l.client_id = ?
-      AND l.compl_id = ?
+FROM loans l
 
-      ORDER BY l.loan_id DESC
-      `,
+LEFT JOIN (
+    SELECT t1.*
+    FROM loan_transactions t1
+    INNER JOIN (
+        SELECT loan_id, MAX(transaction_id) AS max_id
+        FROM loan_transactions
+        GROUP BY loan_id
+    ) t2
+    ON t1.loan_id = t2.loan_id
+    AND t1.transaction_id = t2.max_id
+) lt
+ON l.loan_id = lt.loan_id
+
+LEFT JOIN mortgaged_items m
+ON l.loan_id = m.loan_id
+
+WHERE l.client_id = ?
+AND l.compl_id = ?
+
+ORDER BY l.loan_id DESC
+            `,
                 [clientId, companyId]
             );
 
@@ -498,6 +649,77 @@ LIMIT 1
             console.error(error);
             throw error;
         }
+    }
+
+    async getClientLoanSummary(clientId: number, companyId: number) {
+
+        try {
+            const rows = await this.db.query(
+                `
+SELECT
+  l.loan_id,
+  l.loan_document_number,
+  l.principal_amount,
+  l.interest_amount,
+  l.total_amount,
+  l.interest_rate,
+  l.loan_status,
+  COALESCE(SUM(CASE WHEN t.status = 'SUCCESS' THEN t.paid_amount ELSE 0 END), 0) AS total_paid_amount,
+  COALESCE(SUM(CASE WHEN t.status = 'SUCCESS' THEN t.principal_paid ELSE 0 END), 0) AS total_paid_principal,
+  COALESCE(SUM(CASE WHEN t.status = 'SUCCESS' THEN t.interest_paid ELSE 0 END), 0) AS total_paid_interest,
+  MAX(CASE WHEN t.status = 'SUCCESS' THEN t.transaction_date ELSE NULL END) AS last_payment_date,
+  lt.principal_balance AS current_principal_balance,
+  lt.interest_balance AS current_interest_balance,
+  lt.total_balance AS current_total_balance
+FROM loans l
+LEFT JOIN loan_transactions t
+  ON l.loan_id = t.loan_id
+  AND t.company_id = ?
+  AND t.client_id = ?
+LEFT JOIN (
+  SELECT t2.loan_id,
+         t2.principal_balance,
+         t2.interest_balance,
+         t2.total_balance
+  FROM loan_transactions t2
+  INNER JOIN (
+     SELECT loan_id, MAX(transaction_id) AS max_tx
+     FROM loan_transactions
+     WHERE company_id = ?
+     AND client_id = ?
+     GROUP BY loan_id
+  ) latest
+  ON t2.loan_id = latest.loan_id
+  AND t2.transaction_id = latest.max_tx
+) lt ON l.loan_id = lt.loan_id
+WHERE l.client_id = ?
+  AND l.compl_id = ?
+GROUP BY
+  l.loan_id,
+  l.loan_document_number,
+  l.principal_amount,
+  l.interest_amount,
+  l.total_amount,
+  l.interest_rate,
+  lt.principal_balance,
+  lt.interest_balance,
+  lt.total_balance
+ORDER BY l.loan_id DESC
+                `,
+                [companyId, clientId, companyId, clientId, clientId, companyId]
+            );
+
+//             loans                    → The loan itself (what was given)
+//   + First LEFT JOIN      → All payments ever made (to calculate totals)
+//   + INNER JOIN inside    → Find which transaction is the most recent one
+//   + Second LEFT JOIN     → Grab balance from that most recent transaction
+
+            return rows;
+        } catch (error) {
+            console.error('getClientLoanSummary error', error);
+            throw error;
+        }
+        
     }
 
     async getTransactionReceipt(transactionId: number, companyId: number) {
