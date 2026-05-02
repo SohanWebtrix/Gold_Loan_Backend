@@ -3,6 +3,8 @@
 import { Injectable } from "@nestjs/common";
 import { DatabaseService } from "src/database/database.service";
 import { OPERATOR_SQL } from "src/filter/operator.map";
+import * as Sentry from '@sentry/node';
+
 
 
 @Injectable()
@@ -28,7 +30,8 @@ export class LedureRepository {
         }
 
         catch (error) {
-
+                        Sentry.captureException(error);
+            
             console.error("getTotalCount error is", error)
             throw error;
         }
@@ -112,7 +115,8 @@ export class LedureRepository {
             return result[0]?.total ?? 0;
         }
         catch (error) {
-
+                        Sentry.captureException(error);
+            
             console.error("getFilteredCount is", error)
         }
     }
@@ -136,6 +140,8 @@ export class LedureRepository {
             const rows = await this.db.query(sql, [clientId, companyId]);
             return rows;
         } catch (error) {
+                        Sentry.captureException(error);
+            
             console.error('getLedgerByClientId error', error);
             throw error;
         }
@@ -226,7 +232,8 @@ export class LedureRepository {
             return rows;
         }
         catch (error) {
-
+                        Sentry.captureException(error);
+            
             console.error("FindWithFilters error is", error)
         }
     }
@@ -263,6 +270,8 @@ export class LedureRepository {
         }
         catch (error) {
 
+            Sentry.captureException(error);
+            
             console.error("findAll is", error)
             throw error
         }

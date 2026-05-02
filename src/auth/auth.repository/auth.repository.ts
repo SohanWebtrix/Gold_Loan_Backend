@@ -7,6 +7,7 @@ import { ConflictException, Injectable, InternalServerErrorException } from "@ne
 import * as bcrypt from 'bcrypt';
 import { ResultSetHeader } from "mysql2";
 import { DateTime } from "luxon";
+import * as Sentry from '@sentry/node';
 
 type Customer = {
     customer_id: number;
@@ -122,6 +123,7 @@ export class AuthRepository {
 
         } catch (error: any) {
 
+            Sentry.captureException(error);
 
             console.error(
                 "❌ insertPrefix Bulk DB error:",
@@ -170,7 +172,8 @@ export class AuthRepository {
 
         } catch (error: any) {
 
-
+                        Sentry.captureException(error);
+            
             console.error(
                 "❌ insertPrefix Bulk DB error:",
                 error,
@@ -193,6 +196,8 @@ export class AuthRepository {
             );
             return result;
         } catch (error: any) {
+                        Sentry.captureException(error);
+            
             console.error('deletePrefixes error', error);
             throw new InternalServerErrorException('Failed to delete prefixes');
         }
@@ -228,6 +233,8 @@ export class AuthRepository {
             const sql = `UPDATE company SET ${fields.join(', ')} WHERE company_id = ?`;
             await db.query(sql, [...values, companyId]);
         } catch (error: any) {
+                        Sentry.captureException(error);
+            
             console.error('updateCompany error', error);
             throw error;
         }
@@ -277,6 +284,8 @@ export class AuthRepository {
             const sql = `UPDATE customers SET ${fields.join(', ')} WHERE customer_id = ?`;
             await db.query(sql, [...values, customerId]);
         } catch (error: any) {
+                        Sentry.captureException(error);
+            
             console.error('updateCustomer error', error);
             throw error;
         }
@@ -316,7 +325,7 @@ export class AuthRepository {
 
         }
         catch (error) {
-            // Sentry.captureException(error);
+            Sentry.captureException(error);
 
             console.error("Create user  error is", error)
             if (error.code === "ER_DUP_ENTRY") {
@@ -373,6 +382,8 @@ export class AuthRepository {
 
             return result;
         } catch (error) {
+                        Sentry.captureException(error);
+            
             console.error("insertCompany error", error);
             throw error;
         }
@@ -433,6 +444,8 @@ export class AuthRepository {
 
             return result;
         } catch (error) {
+                        Sentry.captureException(error);
+            
             console.error("insertCustomer error", error);
             throw error;
         }

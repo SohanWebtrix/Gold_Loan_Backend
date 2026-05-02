@@ -53,6 +53,9 @@ export class LoanRepository {
         }
         catch (error) {
 
+                        Sentry.captureException(error);
+
+
             throw error;
         } finally {
 
@@ -109,6 +112,8 @@ export class LoanRepository {
 
             return rows;
         } catch (error) {
+                                    Sentry.captureException(error);
+
             console.error('get Loan by Id ', error);
             throw error;
         }
@@ -410,6 +415,8 @@ export class LoanRepository {
 
         } catch (error) {
 
+                                    Sentry.captureException(error);
+
             console.error("UpdateFilepath error", error);
             throw error;
         }
@@ -423,6 +430,8 @@ export class LoanRepository {
             return rows;
         }
         catch (error) {
+            Sentry.captureException(error);
+
             console.error("failed to delete client", error);
         }
     }
@@ -1285,6 +1294,8 @@ LIMIT 1
             };
 
         } catch (error) {
+
+                                    Sentry.captureException(error);
 
             console.error(
                 '❌ getLoanFullDetails error:',

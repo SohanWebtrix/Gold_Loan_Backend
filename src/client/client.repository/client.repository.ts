@@ -44,6 +44,8 @@ export class ClientRepository {
 
             return rows;
         } catch (error) {
+                        Sentry.captureException(error);
+            
             console.error('getClient search error', error);
             throw error;
         }
@@ -61,6 +63,8 @@ export class ClientRepository {
 
             return rows;
         } catch (error) {
+                        Sentry.captureException(error);
+            
             console.error('getClient by name or mobile no error', error);
             throw error;
         }
@@ -828,6 +832,8 @@ export class ClientRepository {
 
         }
         catch (error) {
+                        Sentry.captureException(error);
+            
             console.error("db error is", error)
 
             throw error;

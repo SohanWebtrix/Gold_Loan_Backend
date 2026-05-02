@@ -2,6 +2,8 @@ import { Injectable, InternalServerErrorException } from "@nestjs/common";
 import { ResultSetHeader } from "mysql2";
 import { DatabaseService } from "src/database/database.service";
 import { OPERATOR_SQL } from "src/filter/operator.map";
+import * as Sentry from '@sentry/node';
+
 
 /* eslint-disable prettier/prettier */
 @Injectable()
@@ -43,6 +45,8 @@ export class TransactionRepository {
     
             } catch (error: any) {
     
+                                        Sentry.captureException(error);
+                
                 console.error("❌ fail to insert ledure DB error:", error);
     
                 throw new InternalServerErrorException(
@@ -85,6 +89,8 @@ LIMIT 1
 
         } catch (error) {
 
+                                    Sentry.captureException(error);
+            
             console.error(
                 '❌ getLoanFullDetails error:',
                 error
@@ -134,6 +140,8 @@ LIMIT 1
 
         }
         catch (error) {
+                                    Sentry.captureException(error);
+            
             console.error("db error is", error)
             throw error;
         }
@@ -153,6 +161,8 @@ LIMIT 1
         }
 
         catch (error) {
+                                    Sentry.captureException(error);
+            
 
             console.error("getTotalCount error is", error)
             throw error;
@@ -237,6 +247,8 @@ LIMIT 1
         }
         catch (error) {
 
+                                    Sentry.captureException(error);
+            
             console.error("getFilteredCount is", error)
         }
     }
@@ -325,6 +337,8 @@ LIMIT 1
         }
         catch (error) {
 
+                                    Sentry.captureException(error);
+            
             console.error("FindWithFilters error is", error)
         }
     }
@@ -357,6 +371,8 @@ LIMIT 1
         }
 
         catch (error) {
+                                    Sentry.captureException(error);
+            
             console.error("findAll is", error)
             throw error
         }
@@ -385,6 +401,8 @@ LIMIT 1
 
         } catch (error) {
 
+                                    Sentry.captureException(error);
+            
             console.error(
                 '❌ getLoanFullDetails error:',
                 error
@@ -425,6 +443,8 @@ LIMIT 1
             return result;
 
         } catch (error) {
+                                    Sentry.captureException(error);
+            
 
             console.error("UpdateFilepath error", error);
             throw error;
@@ -472,6 +492,9 @@ LIMIT 1
             return result;
 
         } catch (error) {
+
+                                    Sentry.captureException(error);
+            
 
             console.error(
                 'insertTransaction error',
@@ -556,6 +579,8 @@ LIMIT 1
             };
 
         } catch (error) {
+                                    Sentry.captureException(error);
+            
 
             console.error(
                 'updateLoanBalance error',
@@ -595,6 +620,8 @@ LIMIT 1
 
             return rows;
         } catch (error) {
+                                    Sentry.captureException(error);
+            
             console.error('getClient search error', error);
             throw error;
         }
@@ -646,6 +673,8 @@ ORDER BY l.loan_id DESC
             return rows;
 
         } catch (error) {
+                                    Sentry.captureException(error);
+            
             console.error(error);
             throw error;
         }
@@ -716,6 +745,8 @@ ORDER BY l.loan_id DESC
 
             return rows;
         } catch (error) {
+                                    Sentry.captureException(error);
+            
             console.error('getClientLoanSummary error', error);
             throw error;
         }
@@ -723,6 +754,8 @@ ORDER BY l.loan_id DESC
     }
 
     async getTransactionReceipt(transactionId: number, companyId: number) {
+
+        try{
 
         const rows = await this.db.query(
             `
@@ -773,6 +806,15 @@ AND t.company_id = ?
 
         return rows;
     }
+
+    catch(error)
+    {
+         Sentry.captureException(error);
+            
+            console.error('getTransactionReceipt error', error);
+            throw error;
+    }
+}
 
 }
 
