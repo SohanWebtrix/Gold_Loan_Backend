@@ -13,47 +13,47 @@ export class TransactionRepository {
 
     }
 
-     async insertLedger(
-            data: any,
-            conn:any,
-        ) {
-                    const db = conn ?? this.db;
-    
-            try {
-    
-                const payload: any = {
-                    ...data,
-                };
-    
-    
-                Object.keys(payload).forEach(key => {
-                    if (payload[key] === undefined) {
-                        payload[key] = null;
-                    }
-                });
-    
-                const columns = Object.keys(payload).join(", ");
-                const placeholders = Object.keys(payload).map(() => "?").join(", ");
-                const values = Object.values(payload);
-    
-                const [result] = await db.query(
-                    `INSERT INTO ledger_entries (${columns}) VALUES (${placeholders})`,
-                    values
-                );
-    
-                return result;
-    
-            } catch (error: any) {
-    
-                                        Sentry.captureException(error);
-                
-                console.error("❌ fail to insert ledure DB error:", error);
-    
-                throw new InternalServerErrorException(
-                    "Failed to insert ledure"
-                );
-            }
+    async insertLedger(
+        data: any,
+        conn: any,
+    ) {
+        const db = conn ?? this.db;
+
+        try {
+
+            const payload: any = {
+                ...data,
+            };
+
+
+            Object.keys(payload).forEach(key => {
+                if (payload[key] === undefined) {
+                    payload[key] = null;
+                }
+            });
+
+            const columns = Object.keys(payload).join(", ");
+            const placeholders = Object.keys(payload).map(() => "?").join(", ");
+            const values = Object.values(payload);
+
+            const [result] = await db.query(
+                `INSERT INTO ledger_entries (${columns}) VALUES (${placeholders})`,
+                values
+            );
+
+            return result;
+
+        } catch (error: any) {
+
+            Sentry.captureException(error);
+
+            console.error("❌ fail to insert ledure DB error:", error);
+
+            throw new InternalServerErrorException(
+                "Failed to insert ledure"
+            );
         }
+    }
 
 
 
@@ -89,8 +89,8 @@ LIMIT 1
 
         } catch (error) {
 
-                                    Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error(
                 '❌ getLoanFullDetails error:',
                 error
@@ -140,8 +140,8 @@ LIMIT 1
 
         }
         catch (error) {
-                                    Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error("db error is", error)
             throw error;
         }
@@ -161,8 +161,8 @@ LIMIT 1
         }
 
         catch (error) {
-                                    Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
 
             console.error("getTotalCount error is", error)
             throw error;
@@ -247,8 +247,8 @@ LIMIT 1
         }
         catch (error) {
 
-                                    Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error("getFilteredCount is", error)
         }
     }
@@ -337,8 +337,8 @@ LIMIT 1
         }
         catch (error) {
 
-                                    Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error("FindWithFilters error is", error)
         }
     }
@@ -371,8 +371,8 @@ LIMIT 1
         }
 
         catch (error) {
-                                    Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error("findAll is", error)
             throw error
         }
@@ -401,8 +401,8 @@ LIMIT 1
 
         } catch (error) {
 
-                                    Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error(
                 '❌ getLoanFullDetails error:',
                 error
@@ -443,8 +443,8 @@ LIMIT 1
             return result;
 
         } catch (error) {
-                                    Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
 
             console.error("UpdateFilepath error", error);
             throw error;
@@ -493,8 +493,8 @@ LIMIT 1
 
         } catch (error) {
 
-                                    Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
 
             console.error(
                 'insertTransaction error',
@@ -579,8 +579,8 @@ LIMIT 1
             };
 
         } catch (error) {
-                                    Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
 
             console.error(
                 'updateLoanBalance error',
@@ -620,15 +620,15 @@ LIMIT 1
 
             return rows;
         } catch (error) {
-                                    Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error('getClient search error', error);
             throw error;
         }
     }
 
     async getClientLoans(clientId: number, companyId: number) {
-        
+
         try {
             const rows = await this.db.query(
                 `
@@ -673,8 +673,8 @@ ORDER BY l.loan_id DESC
             return rows;
 
         } catch (error) {
-                                    Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error(error);
             throw error;
         }
@@ -699,8 +699,24 @@ SELECT
   MAX(CASE WHEN t.status = 'SUCCESS' THEN t.transaction_date ELSE NULL END) AS last_payment_date,
   lt.principal_balance AS current_principal_balance,
   lt.interest_balance AS current_interest_balance,
-  lt.total_balance AS current_total_balance
+  lt.total_balance AS current_total_balance,
+  c.client_code,
+  c.caste,
+  c.occupation,
+  c.mobile_no,
+  c.email,
+  c.dob,
+  c.gender,
+  c.status,
+  c.created_date,
+  CONCAT(cust.first_name, ' ', cust.last_name) AS created_by,
+  c.first_name,
+  c.last_name,
+  c.street_add1,
+  c.street_add2
 FROM loans l
+JOIN clients c ON l.client_id = c.cl_id
+JOIN customers cust ON c.created_by = cust.customer_id
 LEFT JOIN loan_transactions t
   ON l.loan_id = t.loan_id
   AND t.company_id = ?
@@ -732,33 +748,47 @@ GROUP BY
   l.interest_rate,
   lt.principal_balance,
   lt.interest_balance,
-  lt.total_balance
+  lt.total_balance,
+  c.client_code,
+  c.caste,
+  c.occupation,
+  c.mobile_no,
+  c.email,
+  c.dob,
+  c.gender,
+  c.status,
+  c.created_date,
+  c.created_by,
+  c.first_name,
+  c.last_name,
+  c.street_add1,
+  c.street_add2
 ORDER BY l.loan_id DESC
                 `,
                 [companyId, clientId, companyId, clientId, clientId, companyId]
             );
 
-//             loans                    → The loan itself (what was given)
-//   + First LEFT JOIN      → All payments ever made (to calculate totals)
-//   + INNER JOIN inside    → Find which transaction is the most recent one
-//   + Second LEFT JOIN     → Grab balance from that most recent transaction
+            //             loans                    → The loan itself (what was given)
+            //   + First LEFT JOIN      → All payments ever made (to calculate totals)
+            //   + INNER JOIN inside    → Find which transaction is the most recent one
+            //   + Second LEFT JOIN     → Grab balance from that most recent transaction
 
             return rows;
         } catch (error) {
-                                    Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error('getClientLoanSummary error', error);
             throw error;
         }
-        
+
     }
 
     async getTransactionReceipt(transactionId: number, companyId: number) {
 
-        try{
+        try {
 
-        const rows = await this.db.query(
-            `
+            const rows = await this.db.query(
+                `
 SELECT
   t.transaction_id,
   t.transaction_type,
@@ -772,16 +802,19 @@ SELECT
   t.paid_amount,
   t.payment_method,
   t.transaction_ref_no,
-  t.transaction_date,
   CONCAT_WS(' ', c.first_name, c.last_name) AS client_name,
   c.client_code,
+  c.caste,
+ c.client_code,
+  c.mobile_no,
+  CONCAT_WS(' ', cust.first_name, cust.last_name) AS created_by_name,
+  YEAR(t.transaction_date) AS financial_year,
   l.loan_id,
   l.loan_document_number,
   l.principal_amount,
   l.loan_status,
   l.loan_start_date,
   l.due_date,
-
   m.gold_item_id,
   m.category,
   m.morgaged_note,
@@ -798,23 +831,23 @@ JOIN clients c ON t.client_id = c.cl_id
 JOIN loans l ON t.loan_id = l.loan_id
 LEFT JOIN mortgaged_items m ON l.loan_id = m.loan_id
 LEFT JOIN company cm ON t.company_id = cm.company_id
+LEFT JOIN customers cust ON t.created_by = cust.customer_id
 WHERE t.transaction_id = ?
 AND t.company_id = ?
 `,
-            [transactionId, companyId]
-        );
+                [transactionId, companyId]
+            );
 
-        return rows;
-    }
+            return rows;
+        }
 
-    catch(error)
-    {
-         Sentry.captureException(error);
-            
+        catch (error) {
+            Sentry.captureException(error);
+
             console.error('getTransactionReceipt error', error);
             throw error;
+        }
     }
-}
 
 }
 

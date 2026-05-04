@@ -5,8 +5,6 @@ import { DatabaseService } from "src/database/database.service";
 import { OPERATOR_SQL } from "src/filter/operator.map";
 import * as Sentry from '@sentry/node';
 
-
-
 @Injectable()
 export class LedureRepository {
 
@@ -16,13 +14,14 @@ export class LedureRepository {
     }
 
     async getTotalCount(userid: number): Promise<number> {
+        
         try {
             const rows = await this.db.query<number>(
                 `
               SELECT COUNT(*) as total
               FROM ledger_entries where company_id=${userid
-                
-              }
+
+                }
               `
             );
             return rows[0].total;
@@ -30,8 +29,8 @@ export class LedureRepository {
         }
 
         catch (error) {
-                        Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error("getTotalCount error is", error)
             throw error;
         }
@@ -115,15 +114,15 @@ export class LedureRepository {
             return result[0]?.total ?? 0;
         }
         catch (error) {
-                        Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error("getFilteredCount is", error)
         }
     }
 
-    async getLedgerByClientId(clientId: number, companyId: number) {
+    async getLedgerByClientId(clientId: number, companyId: number, page?: number, limit?: number) {
         try {
-            const sql = `
+            let sql = `
               SELECT le.*,
                 CONCAT(c1.first_name, ' ', c1.last_name) AS client_name,
                 l.loan_document_number AS loan_no,
@@ -137,12 +136,39 @@ export class LedureRepository {
               ORDER BY le.entry_id DESC
             `;
 
-            const rows = await this.db.query(sql, [clientId, companyId]);
+            const values: any[] = [clientId, companyId];
+
+            if (page && limit) {
+                const safeLimit = Math.max(1, Number(limit));
+                const safeOffset = Math.max(0, Number((page - 1) * limit));
+                sql += ` LIMIT ${safeLimit} OFFSET ${safeOffset}`;
+            }
+
+            const rows = await this.db.query(sql, values);
             return rows;
         } catch (error) {
-                        Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error('getLedgerByClientId error', error);
+            throw error;
+        }
+    }
+
+    async getLedgerCountByClientId(clientId: number, companyId: number) {
+        try {
+            const sql = `
+              SELECT COUNT(*) as total
+              FROM ledger_entries le
+              WHERE le.client_id = ?
+                AND le.company_id = ?
+            `;
+
+            const rows = await this.db.query(sql, [clientId, companyId]);
+            return rows[0]?.total || 0;
+        } catch (error) {
+            Sentry.captureException(error);
+
+            console.error('getLedgerCountByClientId error', error);
             throw error;
         }
     }
@@ -232,8 +258,8 @@ export class LedureRepository {
             return rows;
         }
         catch (error) {
-                        Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error("FindWithFilters error is", error)
         }
     }
@@ -271,7 +297,7 @@ export class LedureRepository {
         catch (error) {
 
             Sentry.captureException(error);
-            
+
             console.error("findAll is", error)
             throw error
         }

@@ -15,12 +15,12 @@ export class CustomersRepository {
 
     }
 
-    async getCustoemrdetails(customerid:number) {
+    async getCustoemrdetails(customerid: number) {
 
         try {
             const rows = await this.db.query(
                 `SELECT * from customers where customer_id=?
-             `,[customerid]
+             `, [customerid]
             );
             return rows;
         }
@@ -77,7 +77,7 @@ export class CustomersRepository {
                 comp_id: companyId,
                 first_name: data.first_name,
                 last_name: data.last_name,
-                user_name:data.user_name,
+                user_name: data.user_name,
                 cust_name,
                 role: data.role ?? 'staff',
                 status: data.status ?? 1,
@@ -217,6 +217,7 @@ export class CustomersRepository {
     }
 
     async getFilteredCount(filters: any[], userid: number) {
+
         try {
             const where: string[] = [];
             const values: any[] = [];
@@ -306,6 +307,7 @@ export class CustomersRepository {
     async findWithFilters(filters: any[], page: number, limit: number, userid: number) {
 
         try {
+
             const where: string[] = [];
             const values: any[] = [];
 
@@ -437,7 +439,7 @@ export class CustomersRepository {
         }
     }
 
-    async findAllCustid(page: number, limit: number, userid: number) {
+    async findAllCustid(page: number, limit: number, compid: number) {
 
         try {
             const safeLimit = Number(limit);
@@ -458,7 +460,7 @@ export class CustomersRepository {
               LEFT JOIN ab_cities ct ON cs.city = ct.city_id
               LEFT JOIN ab_states st ON cs.state = st.state_id
               LEFT JOIN company cm on cs.comp_id=cm.company_id
-              where cs.comp_id=${userid}
+              where cs.comp_id=${compid}
                 GROUP BY cs.customer_id
             
               ORDER BY customer_id DESC
@@ -472,6 +474,190 @@ export class CustomersRepository {
 
             console.error("findAll is", error)
             throw error
+        }
+    }
+
+
+    async getFilteredCountCustid(filters: any[], compid: number) {
+
+
+                console.log("inside count with  filters cust id method");
+
+        try {
+            const where: string[] = ['cs.comp_id=?'];
+            const values: any[] = [compid];
+
+            filters.forEach((f) => {
+                let value = f.value;
+
+                // EMPTY
+                if (f.operator === 'isEmpty') {
+                    where.push(`(${f.column} IS NULL OR ${f.column} = '')`);
+                    return;
+                }
+
+                // NOT EMPTY
+                if (f.operator === 'is_not_empty') {
+                    where.push(`(${f.column} IS NOT NULL AND ${f.column} != '')`);
+                    return;
+                }
+
+                // DATE
+                if (f.type === 'date') {
+                    const startOfDay = `${f.value} 00:00:00`;
+                    const endOfDay = `${f.value} 23:59:59`;
+
+                    if (f.operator === 'equals') {
+                        where.push(`(${f.column} BETWEEN ? AND ?)`);
+                        values.push(startOfDay, endOfDay);
+                        return;
+                    }
+
+                    if (f.operator === 'before') {
+                        where.push(`${f.column} < ?`);
+                        values.push(startOfDay);
+                        return;
+                    }
+
+                    if (f.operator === 'after') {
+                        where.push(`${f.column} > ?`);
+                        values.push(endOfDay);
+                        return;
+                    }
+
+                    if (f.operator === 'between') {
+                        const startDate = `${f.value} 00:00:00`;
+                        const endDate = `${f.valueTo} 23:59:59`;
+
+                        where.push(`(${f.column} BETWEEN ? AND ?)`);
+                        values.push(startDate, endDate);
+                        return;
+                    }
+                }
+
+                // LIKE
+                if (f.operator === 'contains') value = `%${value}%`;
+                if (f.operator === 'starts_with') value = `${value}%`;
+                if (f.operator === 'ends_with') value = `%${value}`;
+
+                if (f.type === 'number') value = Number(value);
+
+                where.push(`${f.column} ${OPERATOR_SQL[f.operator]} ?`);
+                values.push(value);
+
+            });
+
+            const sql = `
+              SELECT COUNT(DISTINCT cs.customer_id) as total
+              FROM customers cs
+              LEFT JOIN ab_cities ct ON cs.city = ct.city_id
+              LEFT JOIN ab_states st ON cs.state = st.state_id
+              LEFT JOIN company cm on cs.comp_id=cm.company_id
+              ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+            `;
+
+            const result = await this.db.query(sql, values);
+            return result[0]?.total ?? 0;
+        }
+        catch (error) {
+
+            console.error("getFilteredCount is", error)
+        }
+    }
+
+
+    async findWithFiltersCustId(filters: any[], page: number, limit: number, compid: number) {
+
+        console.log("inside findwith filters cust id method");
+        try {
+
+            const where: string[] = ['cs.comp_id = ?'];
+            const values: any[] = [compid];
+
+            filters.forEach((f) => {
+                let value = f.value;
+
+                if (f.operator === 'isEmpty') {
+                    where.push(`(${f.column} IS NULL OR ${f.column} = '')`);
+                    return;
+                }
+
+                if (f.operator === 'is_not_empty') {
+                    where.push(`(${f.column} IS NOT NULL AND ${f.column} != '')`);
+                    return;
+                }
+
+                if (f.type === 'date') {
+                    const startOfDay = `${f.value} 00:00:00`;
+                    const endOfDay = `${f.value} 23:59:59`;
+
+                    if (f.operator === 'equals') {
+                        where.push(`(${f.column} BETWEEN ? AND ?)`);
+                        values.push(startOfDay, endOfDay);
+                        return;
+                    }
+
+                    if (f.operator === 'before') {
+                        where.push(`${f.column} < ?`);
+                        values.push(startOfDay);
+                        return;
+                    }
+
+                    if (f.operator === 'after') {
+                        where.push(`${f.column} > ?`);
+                        values.push(endOfDay);
+                        return;
+                    }
+
+                    if (f.operator === 'between') {
+                        console.log("modified date start value", f.value)
+                        console.log("modified date end value", f.valueTo)
+
+                        const startDate = `${f.value} 00:00:00`;
+                        const endDate = `${f.valueTo} 23:59:59`;
+
+                        where.push(`(${f.column} BETWEEN ? AND ?)`);
+                        values.push(startDate, endDate);
+                        return;
+                    }
+                }
+
+                if (f.operator === 'contains') value = `%${value}%`;
+                if (f.operator === 'starts_with') value = `${value}%`;
+                if (f.operator === 'ends_with') value = `%${value}`;
+                if (f.type === 'number') value = Number(value);
+
+                where.push(`${f.column} ${OPERATOR_SQL[f.operator]} ?`);
+                values.push(value);
+            });
+
+            const safeLimit = Math.max(1, Number(limit));
+            const safeOffset = Math.max(0, Number((page - 1) * limit));
+
+            const sql = `
+               SELECT cs.*,
+                ct.city_name AS city_name,
+                st.state_name AS state_name,
+                cm.company_name as company_name,
+                cm.company_mobile as company_mobile,
+                cm.company_email as company_email
+              FROM customers cs
+              LEFT JOIN ab_cities ct ON cs.city = ct.city_id
+              LEFT JOIN ab_states st ON cs.state = st.state_id
+              LEFT JOIN company cm on cs.comp_id=cm.company_id
+
+                ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+                GROUP BY cs.customer_id
+                ORDER BY cs.customer_id DESC
+                LIMIT ${safeLimit} OFFSET ${safeOffset}
+              `;
+
+            const rows = await this.db.query(sql, values);
+            return rows;
+        }
+        catch (error) {
+
+            console.error("FindWithFilters error is", error)
         }
     }
 
@@ -500,8 +686,10 @@ export class CustomersRepository {
             const rows = await this.db.query<number>(
                 `
               SELECT COUNT(*) as total
-              FROM customers where comp_id=${userid}
-              `
+              FROM customers
+              WHERE comp_id = ?
+              `,
+                [userid],
             );
             return rows[0].total;
 

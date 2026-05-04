@@ -53,7 +53,7 @@ export class LoanRepository {
         }
         catch (error) {
 
-                        Sentry.captureException(error);
+            Sentry.captureException(error);
 
 
             throw error;
@@ -63,22 +63,22 @@ export class LoanRepository {
     }
 
 
-        
 
-        async getClientstatus(cid: number) {
-            try {
-                const rows = await this.db.query(
-                    'SELECT * FROM clients WHERE cl_id = ? LIMIT 1',
-                    [cid]
-                );
-                return rows[0];
-            }
-            catch (error) {
-                Sentry.captureException(error);
-    
-                console.error("get Clinet By Id error", error)
-            }
+
+    async getClientstatus(cid: number) {
+        try {
+            const rows = await this.db.query(
+                'SELECT * FROM clients WHERE cl_id = ? LIMIT 1',
+                [cid]
+            );
+            return rows[0];
         }
+        catch (error) {
+            Sentry.captureException(error);
+
+            console.error("get Clinet By Id error", error)
+        }
+    }
 
     async getFilteredCountSearch(search: string, userid: number): Promise<number> {
         try {
@@ -112,7 +112,7 @@ export class LoanRepository {
 
             return rows;
         } catch (error) {
-                                    Sentry.captureException(error);
+            Sentry.captureException(error);
 
             console.error('get Loan by Id ', error);
             throw error;
@@ -179,12 +179,12 @@ export class LoanRepository {
         }
     }
 
-  async insertLoanTransaction(
+    async insertLoanTransaction(
         data: any,
-        userId:number,
-        conn:any,
+        userId: number,
+        conn: any,
     ) {
-                const db = conn ?? this.db;
+        const db = conn ?? this.db;
 
         try {
 
@@ -226,11 +226,11 @@ export class LoanRepository {
     }
 
 
-      async insertLedger(
+    async insertLedger(
         data: any,
-        conn:any,
+        conn: any,
     ) {
-                const db = conn ?? this.db;
+        const db = conn ?? this.db;
 
         try {
 
@@ -385,7 +385,7 @@ export class LoanRepository {
 
 
     async updateFilesPath(lid: number, files: any) {
-        
+
         try {
             const fields: string[] = [];
             const values: any[] = [];
@@ -415,7 +415,7 @@ export class LoanRepository {
 
         } catch (error) {
 
-                                    Sentry.captureException(error);
+            Sentry.captureException(error);
 
             console.error("UpdateFilepath error", error);
             throw error;
@@ -730,7 +730,24 @@ export class LoanRepository {
     async getLoanById(loanId: number) {
         try {
             const rows = await this.db.query(
-                'SELECT * FROM loans WHERE loan_id = ? LIMIT 1',
+                `
+SELECT 
+  l.*,
+  CONCAT_WS(' ', c.first_name, c.last_name) AS borrower,
+  c.caste,
+  c.mobile_no,
+  c.client_code,
+  c.email,
+  c.dob,
+  c.gender,
+  CONCAT_WS(' ', cust.first_name, cust.last_name) AS created_by_name,
+  YEAR(l.loan_start_date) AS financial_year,
+  l.loan_document_number  as loan_no
+  FROM loans l
+  JOIN clients c ON l.client_id = c.cl_id
+LEFT JOIN customers cust ON l.created_by = cust.customer_id
+WHERE l.loan_id = ? LIMIT 1
+                `,
                 [loanId]
             );
             return rows[0];
@@ -782,16 +799,35 @@ export class LoanRepository {
 
 
 
-    
+
     async getMortgage(loanId: number) {
 
         try {
+
             const rows = await this.db.query(
-                'SELECT * FROM mortgaged_items WHERE loan_id = ?',
+                `
+SELECT 
+  m.*,
+  CONCAT_WS(' ', c.first_name, c.last_name) AS borrower,
+  c.caste,
+  c.client_code,
+  c.mobile_no,
+  CONCAT_WS(' ', cust.first_name, cust.last_name) AS created_by_name,
+  YEAR(l.loan_start_date) AS financial_year,
+  l.loan_document_number  as loan_no
+FROM mortgaged_items m
+JOIN loans l ON m.loan_id = l.loan_id
+JOIN clients c ON l.client_id = c.cl_id
+LEFT JOIN customers cust ON l.created_by = cust.customer_id
+WHERE m.loan_id = ?
+                `,
                 [loanId]
             );
+
             return rows;
+
         }
+
         catch (error) {
             Sentry.captureException(error);
 
@@ -1146,7 +1182,7 @@ export class LoanRepository {
     async updateLoan(
         loan_id: number,
         dto: any,
-        filePaths:any,
+        filePaths: any,
         userid: number,
         conn
     ) {
@@ -1295,7 +1331,7 @@ LIMIT 1
 
         } catch (error) {
 
-                                    Sentry.captureException(error);
+            Sentry.captureException(error);
 
             console.error(
                 '❌ getLoanFullDetails error:',

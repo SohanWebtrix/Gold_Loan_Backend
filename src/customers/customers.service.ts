@@ -138,7 +138,7 @@ export class CustomersService {
     page: number,
     limit: number,
     filters: any[] = [],
-    userid: number
+    companyid: number
   ) {
 
     // const customer = await this.customerRepo.findById(userId);
@@ -173,15 +173,15 @@ export class CustomersService {
 
       const totalRecords =
         validatedFilters.length > 0
-          ? await this.customerRepo.getFilteredCount(validatedFilters, userid)
-          : await this.customerRepo.getTotalCountByid(userid);
+          ? await this.customerRepo.getFilteredCountCustid(validatedFilters, companyid)
+          : await this.customerRepo.getTotalCountByid(companyid);
 
       const totalPages = Math.ceil(totalRecords / limit);
 
       const data =
         validatedFilters.length > 0
-          ? await this.customerRepo.findWithFilters(validatedFilters, page, limit, userid)
-          : await this.customerRepo.findAllCustid(page, limit, userid);
+          ? await this.customerRepo.findWithFiltersCustId(validatedFilters, page, limit, companyid)
+          : await this.customerRepo.findAllCustid(page, limit, companyid);
 
       const start = totalRecords === 0 ? 0 : (page - 1) * limit + 1;
       const end = Math.min(page * limit, totalRecords);

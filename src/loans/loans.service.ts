@@ -73,7 +73,7 @@ export class LoansService {
     }
   }
 
-  async getClientLoanSummary(clientId: number, companyId: number) {
+  async getClientLoanSummary(clientId: number, companyId: number, page: number = 1, limit: number = 10) {
     try {
       const loans = await this.transactionRepo.getClientLoanSummary(clientId, companyId);
 
@@ -142,12 +142,36 @@ export class LoansService {
         },
       );
 
-      const ledureRows = await this.ledureRepo.getLedgerByClientId(clientId, companyId);
+      // Get total count for pagination
+      const totalLedureRecords = await this.ledureRepo.getLedgerCountByClientId(clientId, companyId);
+      const totalPages = Math.ceil(totalLedureRecords / limit);
+      const start = totalLedureRecords === 0 ? 0 : (page - 1) * limit + 1;
+      const end = Math.min(page * limit, totalLedureRecords);
+
+      const ledureRows = await this.ledureRepo.getLedgerByClientId(clientId, companyId, page, limit);
+
+      const client = loans.length > 0 ? {
+        client_code: loans[0].client_code,
+        caste: loans[0].caste,
+        occupation: loans[0].occupation,
+        mobile_no: loans[0].mobile_no,
+        email: loans[0].email,
+        dob: loans[0].dob,
+        gender: loans[0].gender,
+        status: loans[0].status,
+        created_date: loans[0].created_date,
+        created_by: loans[0].created_by,
+        first_name: loans[0].first_name,
+        last_name: loans[0].last_name,
+        street_add1: loans[0].street_add1,
+        street_add2: loans[0].street_add2
+      } : null;
 
       return {
         success: true,
         message: loanRows.length ? 'Client loan summary fetched successfully' : 'No loans found for this client',
         client_id: clientId,
+        client,
         loan_count: loanRows.length,
         totals: {
           ...totals,
@@ -155,7 +179,17 @@ export class LoansService {
             loanRows.length > 0 ? totals.total_interest_rate / loanRows.length : 0,
         },
         loans: loanRows,
-        ledure: ledureRows,
+        ledure: {
+          currentPage: page,
+          limit,
+          start,
+          end,
+          totalRecords: totalLedureRecords,
+          totalPages,
+          nextPage: page < totalPages ? page + 1 : null,
+          previousPage: page > 1 ? page - 1 : null,
+          data: ledureRows
+        },
       };
     } catch (error) {
       console.error('getClientLoanSummary error', error);
@@ -1088,4 +1122,3 @@ export class LoansService {
   }
 
 }
-

@@ -37,8 +37,8 @@ export type LoginUserType = {
     cust_name: string;
     cust_password: string;
     status: string; // or 'active' | 'inactive' if you know values
-    role:string;
-    profile_pic_path:string;
+    role: string;
+    profile_pic_path: string;
 
 };
 
@@ -92,8 +92,10 @@ export class AuthRepository {
 
     async insertprefixbulk(
         prefix: any[],
-        comapny_id: number) {
+        comapny_id: number,
+        conn: any) {
 
+        const db = conn ?? this.db;
 
         try {
             if (!prefix?.length) return;
@@ -117,7 +119,7 @@ export class AuthRepository {
           VALUES ?
         `;
 
-            const result = await this.db.bulkQuery(sql, [values]);
+            const result = await db.bulkQuery(sql, [values]);
 
             return result;
 
@@ -136,12 +138,12 @@ export class AuthRepository {
         }
     }
 
-      async insertprefixbulku(
+    async insertprefixbulku(
         prefix: any[],
         comapny_id: number,
-    conn:any) {
+        conn: any) {
 
-                const db = conn ?? this.db;
+        const db = conn ?? this.db;
 
 
         try {
@@ -172,8 +174,8 @@ export class AuthRepository {
 
         } catch (error: any) {
 
-                        Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error(
                 "❌ insertPrefix Bulk DB error:",
                 error,
@@ -196,8 +198,8 @@ export class AuthRepository {
             );
             return result;
         } catch (error: any) {
-                        Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error('deletePrefixes error', error);
             throw new InternalServerErrorException('Failed to delete prefixes');
         }
@@ -233,8 +235,8 @@ export class AuthRepository {
             const sql = `UPDATE company SET ${fields.join(', ')} WHERE company_id = ?`;
             await db.query(sql, [...values, companyId]);
         } catch (error: any) {
-                        Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error('updateCompany error', error);
             throw error;
         }
@@ -284,8 +286,8 @@ export class AuthRepository {
             const sql = `UPDATE customers SET ${fields.join(', ')} WHERE customer_id = ?`;
             await db.query(sql, [...values, customerId]);
         } catch (error: any) {
-                        Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error('updateCustomer error', error);
             throw error;
         }
@@ -348,7 +350,9 @@ export class AuthRepository {
     }
 
     // Insert Company (Manual Query)
-    async insertCompany(data: any, userId: number) {
+    async insertCompany(data: any, userId: number, conn: any) {
+                const db = conn ?? this.db;
+
         try {
             const company_email = data.company_email || null;
             const company_mobile = data.company_mobile || null;
@@ -359,7 +363,7 @@ export class AuthRepository {
                 .toUTC()
                 .toFormat("yyyy-MM-dd HH:mm:ss");
 
-            const result = await this.db.query(
+            const result = await db.query(
                 `
             INSERT INTO company
             (
@@ -382,8 +386,8 @@ export class AuthRepository {
 
             return result;
         } catch (error) {
-                        Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error("insertCompany error", error);
             throw error;
         }
@@ -394,8 +398,11 @@ export class AuthRepository {
     async insertCustomer(
         data: any,
         userId: number,
-        company_id: number
+        company_id: number,
+        conn: any
     ) {
+                const db = conn ?? this.db;
+
         try {
             const cust_password = data.cust_password
                 ? await bcrypt.hash(data.cust_password, 10)
@@ -405,7 +412,7 @@ export class AuthRepository {
                 .toUTC()
                 .toFormat("yyyy-MM-dd HH:mm:ss");
 
-            const result = await this.db.query(
+            const result = await db.query(
                 `
             INSERT INTO customers
             (
@@ -444,8 +451,8 @@ export class AuthRepository {
 
             return result;
         } catch (error) {
-                        Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error("insertCustomer error", error);
             throw error;
         }

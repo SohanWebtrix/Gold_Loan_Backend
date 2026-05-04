@@ -155,9 +155,13 @@ export class LoansController {
     async getClientLoanSummary(
         @Param('clientId', ParseIntPipe) clientId: number,
         @Headers('comp-id') companyId: string,
+        @Query('page') page = '1',
+        @Query('limit') limit = '10',
     ) {
         const companyIdNum = Number(companyId);
-        return this.loanServ.getClientLoanSummary(clientId, companyIdNum);
+        const pageNum = Number(page);
+        const limitNum = Number(limit);
+        return this.loanServ.getClientLoanSummary(clientId, companyIdNum, pageNum, limitNum);
     }
 
     @Post("search-loan")

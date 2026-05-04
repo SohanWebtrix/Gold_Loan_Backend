@@ -41,123 +41,126 @@ export class AuthService {
 
 
 
-  // SERVICE
-async CreateUser(dto: any, userId: number) {
-    try {
-        console.log("create user dto is", dto);
+    // SERVICE
+    async CreateUser(dto: any, userId: number) {
+        try {
 
-        // 1️⃣ Insert into company table
-        const companyResult: any = await this.authRepo.insertCompany(dto, userId);
+            console.log("create user dto is", dto);
 
-        const company_id = companyResult.insertId;
+            // 1️⃣ Insert into company table
+            await this.db.transaction(async (conn) => {
 
-        // 2️⃣ Insert into customer table with company_id
-        const customerResult: any = await this.authRepo.insertCustomer(
-            dto,
-            userId,
-            company_id
-        );
+                const companyResult: any = await this.authRepo.insertCompany(dto, userId,conn);
 
-        const insertPrefix = await this.authRepo.insertprefixbulk(
-            dto.prefix,
-            company_id
-        );
+                const company_id = companyResult.insertId;
 
-        // 3️⃣ Success check
-        if (customerResult && customerResult.affectedRows === 1) {
-            return {
-                success: true,
-                message: "Customer added successfully",
-                customerId: customerResult.insertId,
-                companyId: company_id,
-            };
-        }
+                // 2️⃣ Insert into customer table with company_id
+                await this.authRepo.insertCustomer(
+                    dto,
+                    userId,
+                    company_id,
+                    conn
+                );
 
-        throw new InternalServerErrorException("Failed to add customer");
-    } catch (error) {
-        console.error("CreateCustomer error", error);
-        throw error;
-    }
-}
-
-  async UpdateCustomer(dto: any,customerIdNumber:number, userId: number) {
-    try {
-      const companyId = Number(dto.company_id);
-
-      if (!companyId || !customerIdNumber) {
-        throw new BadRequestException('company_id is required');
-      }
-
-         if (!customerIdNumber) {
-        throw new BadRequestException('customer_id are required');
-      }
-
-      await this.db.transaction(async (conn) => {
-        // Update company fields when present
-        await this.authRepo.updateCompany(companyId, dto, userId, conn);
-
-        // Update customer fields when present
-        await this.authRepo.updateCustomer(customerIdNumber, dto, userId, conn);
-
-        // Sync prefix records if prefix array is provided
-        if (Array.isArray(dto.prefix)) {
-          await this.authRepo.deletePrefixes(companyId, conn);
-          await this.authRepo.insertprefixbulku(dto.prefix, companyId, conn);
-        }
-      });
+                await this.authRepo.insertprefixbulk(
+                    dto.prefix,
+                    company_id,
+                    conn
+                );
+            })
 
       return {
-        success: true,
-        message: 'Customer updated successfully',
-        companyId,
-        customerIdNumber,
-      };
-    } catch (error) {
-      console.error('UpdateCustomer error', error);
-      throw error;
-    }
-  }
+                success: true,
+                message: 'prefix added successfully',
+      
+            };
 
-  async getCustomerDetails(customerId: number, headerCompId?: number) {
-    if (!customerId || Number.isNaN(customerId)) {
-      throw new BadRequestException('customer_id is required');
+        }
+
+        catch (error) {
+            console.error("create prefix error", error);
+            throw error;
+        }
     }
 
-    const customer = await this.authRepo.findCustomerWithCompany(customerId);
-    if (!customer) {
-      throw new BadRequestException('Customer not found');
+    async UpdateCustomer(dto: any, customerIdNumber: number, userId: number) {
+        try {
+            const companyId = Number(dto.company_id);
+
+            if (!companyId || !customerIdNumber) {
+                throw new BadRequestException('company_id is required');
+            }
+
+            if (!customerIdNumber) {
+                throw new BadRequestException('customer_id are required');
+            }
+
+            await this.db.transaction(async (conn) => {
+                // Update company fields when present
+                await this.authRepo.updateCompany(companyId, dto, userId, conn);
+
+                // Update customer fields when present
+                await this.authRepo.updateCustomer(customerIdNumber, dto, userId, conn);
+
+                // Sync prefix records if prefix array is provided
+                if (Array.isArray(dto.prefix)) {
+                    await this.authRepo.deletePrefixes(companyId, conn);
+                    await this.authRepo.insertprefixbulku(dto.prefix, companyId, conn);
+                }
+            });
+
+            return {
+                success: true,
+                message: 'Customer updated successfully',
+                companyId,
+                customerIdNumber,
+            };
+        } catch (error) {
+            console.error('UpdateCustomer error', error);
+            throw error;
+        }
     }
 
-    const prefixCompanyId = headerCompId || customer.comp_id;
-    const prefixes = await this.authRepo.getPrefixesByCompany(prefixCompanyId);
+    async getCustomerDetails(customerId: number, headerCompId?: number) {
+        if (!customerId || Number.isNaN(customerId)) {
+            throw new BadRequestException('customer_id is required');
+        }
 
-    return {
-      customer: {
-        customer_id: customer.customer_id,
-        comp_id: customer.comp_id,
-        first_name: customer.first_name,
-        last_name: customer.last_name,
-        status: customer.status,
-        address_line1: customer.address_line1,
-        address_line2: customer.address_line2,
-        state: customer.state,
-        city: customer.city,
-        pincode: customer.pincode,
-        cust_phone: customer.cust_phone,
-        cust_email: customer.cust_email,
-        user_name: customer.user_name,
-      },
-      company: {
-        company_id: customer.company_id,
-        company_name: customer.company_name,
-        company_email: customer.company_email,
-        company_mobile: customer.company_mobile,
-      },
-      prefixes,
-    };
-  }
+        const customer = await this.authRepo.findCustomerWithCompany(customerId);
+        if (!customer) {
+            throw new BadRequestException('Customer not found');
+        }
 
-  async CreateAdmin(dto: any) {
+        const prefixCompanyId = headerCompId || customer.comp_id;
+        const prefixes = await this.authRepo.getPrefixesByCompany(prefixCompanyId);
+
+        return {
+            customer: {
+                customer_id: customer.customer_id,
+                comp_id: customer.comp_id,
+                first_name: customer.first_name,
+                last_name: customer.last_name,
+                status: customer.status,
+                address_line1: customer.address_line1,
+                address_line2: customer.address_line2,
+                state: customer.state,
+                city: customer.city,
+                pincode: customer.pincode,
+                cust_phone: customer.cust_phone,
+                cust_email: customer.cust_email,
+                user_name: customer.user_name,
+            },
+            company: {
+                company_id: customer.company_id,
+                company_name: customer.company_name,
+                company_email: customer.company_email,
+                company_mobile: customer.company_mobile,
+            },
+            prefixes,
+        };
+    }
+
+    async CreateAdmin(dto: any) {
 
         try {
             const result: any = await this.authRepo.insertAdmin(dto);
@@ -217,10 +220,10 @@ async CreateUser(dto: any, userId: number) {
                 id: user.customer_id,
                 email: user.cust_email,
                 name: user.cust_name,
-                comp_id:user.comp_id,
-                mobile_no:user.cust_phone,
-                role:user.role,
-                profile_path:user.profile_pic_path
+                comp_id: user.comp_id,
+                mobile_no: user.cust_phone,
+                role: user.role,
+                profile_path: user.profile_pic_path
             },
         };
     }
@@ -263,7 +266,7 @@ async CreateUser(dto: any, userId: number) {
                 id: user.admin_id,
                 email: user.admin_email,
                 name: user.admin_name,
-                mobile_no:user.admin_phone,
+                mobile_no: user.admin_phone,
             },
         };
     }
@@ -368,7 +371,7 @@ async CreateUser(dto: any, userId: number) {
                 throw new BadRequestException('Email does not exists');
             }
 
-         
+
 
 
             // 3️⃣ Hash password

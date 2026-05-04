@@ -17,6 +17,7 @@ import { CustomersModule } from './customers/customers.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { LedureModule } from './ledure/ledure.module';
 import { AdminModule } from './admin/admin.module';
+import { SettingModule } from './setting/setting.module';
 
 
 @Module({
@@ -39,6 +40,7 @@ import { AdminModule } from './admin/admin.module';
     CustomersModule,
     LedureModule,
     AdminModule,
+    SettingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

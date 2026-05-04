@@ -77,7 +77,6 @@ export class CustomersController {
         @Body('filters') filters: any[] = [],
         @Headers('comp-id') companyId: string,
     ) {
-
         const companyIdNum = Number(companyId);
         console.log("company id is", companyIdNum);
 
