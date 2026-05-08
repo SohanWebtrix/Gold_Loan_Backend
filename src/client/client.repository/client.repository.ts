@@ -44,8 +44,8 @@ export class ClientRepository {
 
             return rows;
         } catch (error) {
-                        Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error('getClient search error', error);
             throw error;
         }
@@ -63,8 +63,8 @@ export class ClientRepository {
 
             return rows;
         } catch (error) {
-                        Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error('getClient by name or mobile no error', error);
             throw error;
         }
@@ -413,14 +413,15 @@ export class ClientRepository {
             delete updateData.remove_photo
 
 
-            // remove undefined
-            const filteredData = Object.fromEntries(
-                Object.entries(updateData).filter(([_, value]) => value !== undefined),
-            );
+            // ✅ convert undefined → null
+            Object.keys(updateData).forEach((key) => {
+                if (updateData[key] === undefined) {
+                    updateData[key] = null;
+                }
+            });
 
 
-
-            const { modified_date, ...restDto } = filteredData;
+            const { modified_date, ...restDto } = updateData;
 
 
             const fields = Object.keys(restDto);
@@ -539,7 +540,7 @@ export class ClientRepository {
     }
 
     async getFilteredCount(filters: any[], userid: number) {
-        
+
         try {
             const where: string[] = ['cl.compc_id=?'];
             const values: any[] = [userid];
@@ -795,6 +796,34 @@ export class ClientRepository {
     }
 
 
+  async deletClientPermanately(cid: number) {
+    try {
+
+        const result = await this.db.query(
+            `
+            DELETE FROM clients
+            WHERE cl_id = ?
+            AND NOT EXISTS (
+                SELECT 1
+                FROM loans
+                WHERE client_id = ?
+            )
+            LIMIT 1
+            `,
+            [cid, cid]
+        );
+
+        return result;
+
+    } catch (error) {
+        Sentry.captureException(error);
+
+        console.error("delete by id error is", error);
+        throw error;
+    }
+}
+
+
     async generateNumber(companyId: number, docType: string, conn?: any): Promise<string> {
         const db = conn ?? this.db;
 
@@ -832,8 +861,8 @@ export class ClientRepository {
 
         }
         catch (error) {
-                        Sentry.captureException(error);
-            
+            Sentry.captureException(error);
+
             console.error("db error is", error)
 
             throw error;

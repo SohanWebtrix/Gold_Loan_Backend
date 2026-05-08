@@ -23,6 +23,25 @@ export class LoansService {
     private readonly ledureRepo: LedureRepository,
   ) { }
 
+  
+async searchLoansmobile(
+  search: string,
+  page: number,
+  limit: number,
+  companyId: number,
+) {
+
+  if (!search?.trim()) {
+    throw new BadRequestException('Search is required');
+  }
+
+  return this.loanRepo.searchLoansmob(
+    search.trim(),
+    page,
+    limit,
+    companyId,
+  );
+}
 
   async searchLoans(search: string, page: number,
     limit: number, userid: number) {
@@ -73,11 +92,15 @@ export class LoansService {
     }
   }
 
-  async getClientLoanSummary(clientId: number, companyId: number, page: number = 1, limit: number = 10) {
+  async getClientLoanSummary(clientId: number, companyId: number, page: number = 1, limit: number = 10, filters: any[] = []) {
     try {
       const loans = await this.transactionRepo.getClientLoanSummary(clientId, companyId);
 
-      const loanRows = (loans || []).map((loan: any) => {
+      const validLoans = (loans || []).filter(
+  (loan: any) => loan.loan_id !== null
+);
+
+      const loanRows = validLoans.map((loan: any) => {
         const totalAmount = Number(loan.total_amount ?? 0);
         const principalAmount = Number(loan.principal_amount ?? 0);
         const interestAmount = Number(loan.interest_amount ?? 0);
@@ -88,7 +111,7 @@ export class LoansService {
         const pendingAmount = Number(
           loan.current_total_balance ?? (totalAmount - totalPaidAmount)
         );
-        
+
         const pendingPrincipal = Number(
           loan.current_principal_balance ?? (principalAmount - totalPaidPrincipal)
         );
@@ -98,11 +121,14 @@ export class LoansService {
 
         return {
           loan_id: loan.loan_id,
-          loan_status:loan.loan_status,
+          loan_status: loan.loan_status,
           loan_document_number: loan.loan_document_number,
+          loan_start_date:loan.loan_start_date,
+          tenure: loan.tenure,
           principal_amount: principalAmount,
           interest_amount: interestAmount,
-          total_amount: totalAmount,
+          topup_amount: Number(loan.total_topup_amount ?? 0),
+           total_amount: totalAmount,
           interest_rate: interestRate,
           total_paid_amount: totalPaidAmount,
           total_paid_principal: totalPaidPrincipal,
@@ -142,13 +168,18 @@ export class LoansService {
         },
       );
 
+      const clientTotalTopupAmount =
+  loans.length > 0
+    ? Number(loans[0].client_total_topup_amount ?? 0)
+    : 0;
+
       // Get total count for pagination
-      const totalLedureRecords = await this.ledureRepo.getLedgerCountByClientId(clientId, companyId);
+      const totalLedureRecords = await this.ledureRepo.getLedgerCountByClientId(clientId, companyId, filters);
       const totalPages = Math.ceil(totalLedureRecords / limit);
       const start = totalLedureRecords === 0 ? 0 : (page - 1) * limit + 1;
       const end = Math.min(page * limit, totalLedureRecords);
 
-      const ledureRows = await this.ledureRepo.getLedgerByClientId(clientId, companyId, page, limit);
+      const ledureRows = await this.ledureRepo.getLedgerByClientId(clientId, companyId, page, limit, filters);
 
       const client = loans.length > 0 ? {
         client_code: loans[0].client_code,
@@ -175,8 +206,12 @@ export class LoansService {
         loan_count: loanRows.length,
         totals: {
           ...totals,
+            client_total_topup_amount: clientTotalTopupAmount,
+
           average_interest_rate:
-            loanRows.length > 0 ? totals.total_interest_rate / loanRows.length : 0,
+            loanRows.length > 0
+              ? Number((totals.total_interest_rate / loanRows.length).toFixed(2))
+              : 0,
         },
         loans: loanRows,
         ledure: {
@@ -202,7 +237,7 @@ export class LoansService {
       const items = await this.loanRepo.getMortgage(loanId);
 
 
-      console.log("items is",items);
+      console.log("items is", items);
       return {
         success: true,
         message: items?.length ? 'Mortgaged items fetched successfully' : 'No mortgaged items found for this loan',
@@ -215,7 +250,7 @@ export class LoansService {
     }
   }
 
-    async getLoanRecpt(loanId: number) {
+  async getLoanRecpt(loanId: number) {
     try {
       const items = await this.loanRepo.getLoanById(loanId);
       return {
@@ -337,8 +372,7 @@ export class LoansService {
       const loanRes = await this.loanRepo.insertLoan(dto, userId);
       console.log("loan id in loanRes is", loanRes)
 
-       loanId = loanRes.insertId;
-
+      loanId = loanRes.insertId;
 
       if (loanId === null) {
         throw new Error('Loan ID not generated');
@@ -437,95 +471,129 @@ export class LoansService {
 
 
 
-         if (
-        dto.Loan_status &&
-        dto.Loan_status === "active"
-      ) {
-        // Generate Receipt Number
-        const receiptNo =
-          await this.loanRepo.generateNumber(
-            companyIdNum,
-            "TRANSACTION"
+        if (
+          dto.Loan_status &&
+          dto.Loan_status === "active"
+        ) {
+          // Generate Receipt Number
+          // const receiptNo =
+          //   await this.loanRepo.generateNumber(
+          //     companyIdNum,
+          //     "TRANSACTION"
+          //   );
+
+          // -------------------------------------
+          // Insert loan_transactions row
+          // -------------------------------------
+          // const txRes =
+          //   await this.loanRepo.insertLoanTransaction(
+          //     {
+          //       receipt_no: receiptNo,
+          //       loan_id: loanId,
+          //       client_id: dto.client_id,
+          //       company_id: companyIdNum,
+          //       transaction_date: new Date(),
+          //       transaction_type: "DISBURSEMENT",
+          //       payment_method: dto.payment_type,
+          //       paid_amount: 0,
+          //       principal_paid: 0,
+          //       interest_paid: 0,
+          //       overdue_paid: 0,
+          //       topup_amount: 0,
+          //       principal_balance: dto.principal_amount,
+          //       interest_balance: dto.interest_amount,
+          //       overdue_balance: dto.overdue_amount||0,
+          //       total_balance: dto.total_amount,
+          //       remarks: "Loan Disbursed",
+          //       cheque_no: dto.cheque_no || null,
+          //       account_type: dto.account_type,
+          //       transaction_ref_no:
+          //         dto.transaction_ref_no || null,
+          //       status: "SUCCESS",
+          //       created_by: userId,
+          //       payment_proof_path:
+          //         transactionImg?.dbPath || null,
+          //     },
+          //     userId,
+          //     conn
+          //   );
+
+          // const transactionId = txRes.insertId;
+          const istNow = DateTime.now().setZone('Asia/Kolkata').toFormat('yyyy-MM-dd HH:mm:ss');
+
+          const accountBalance =
+    await this.loanRepo.getLatestAccountBalance(
+        dto.account_type,
+        conn
+    );
+
+    const loanAmount = Number(dto.principal_amount);
+
+if (loanAmount > accountBalance) {
+  throw new BadRequestException(
+    `Insufficient balance. Available balance is ₹${accountBalance}`
+  );
+}
+
+const accountBalanceAfter =
+    accountBalance - loanAmount;
+
+
+    const loanBalance =
+    await this.loanRepo.getLatestLoanBalance(
+        loanId,
+        conn
+    );
+
+const loanBalanceAfter =
+    loanBalance + loanAmount;
+
+    
+
+          // -------------------------------------
+          // Ledger Entry 1
+          // DR Loan Receivable
+          // -------------------------------------
+          await this.loanRepo.insertLedger(
+            {
+              loan_id: loanId,
+              client_id: dto.client_id,
+              company_id: companyIdNum,
+              credit: dto.principal_amount,
+              balance_after: loanBalanceAfter,
+              debit: 0,
+              entry_type: "DISBURSEMENT",
+              remarks: "Loan given to customer",
+              status: "credit",
+              type: "loan",
+              entry_date: istNow
+            },
+            conn
           );
 
-        // -------------------------------------
-        // Insert loan_transactions row
-        // -------------------------------------
-        // const txRes =
-        //   await this.loanRepo.insertLoanTransaction(
-        //     {
-        //       receipt_no: receiptNo,
-        //       loan_id: loanId,
-        //       client_id: dto.client_id,
-        //       company_id: companyIdNum,
-        //       transaction_date: new Date(),
-        //       transaction_type: "DISBURSEMENT",
-        //       payment_method: dto.payment_type,
-        //       paid_amount: 0,
-        //       principal_paid: 0,
-        //       interest_paid: 0,
-        //       overdue_paid: 0,
-        //       topup_amount: 0,
-        //       principal_balance: dto.principal_amount,
-        //       interest_balance: dto.interest_amount,
-        //       overdue_balance: dto.overdue_amount||0,
-        //       total_balance: dto.total_amount,
-        //       remarks: "Loan Disbursed",
-        //       cheque_no: dto.cheque_no || null,
-        //       account_type: dto.account_type,
-        //       transaction_ref_no:
-        //         dto.transaction_ref_no || null,
-        //       status: "SUCCESS",
-        //       created_by: userId,
-        //       payment_proof_path:
-        //         transactionImg?.dbPath || null,
-        //     },
-        //     userId,
-        //     conn
-        //   );
+          // -------------------------------------
+          // Ledger Entry 2
+          // CR Selected Account
+          // -------------------------------------
+          await this.loanRepo.insertLedger(
+            {
+              loan_id: loanId,
+              client_id: dto.client_id,
+              company_id: companyIdNum,
+              account_id: dto.account_type,
+              credit: 0,
+              debit: dto.principal_amount,
+              entry_type: "DISBURSEMENT",
+              remarks: "Paid from selected account",
+              balance_after: accountBalanceAfter,
+              status: "debit",
+              type: "account",
+              entry_date: istNow
+            },
+            conn
+          );
+        }
 
-        // const transactionId = txRes.insertId;
-
-        // -------------------------------------
-        // Ledger Entry 1
-        // DR Loan Receivable
-        // -------------------------------------
-        await this.loanRepo.insertLedger(
-          {
-            loan_id: loanId,
-            client_id: dto.client_id,
-            company_id: companyIdNum,
-            credit: dto.principal_amount,
-            debit: 0,
-            entry_type: "DISBURSEMENT",
-            remarks: "Loan given to customer",
-            status:"credit",
-            type:"loan"
-          },
-          conn
-        );
-
-        // -------------------------------------
-        // Ledger Entry 2
-        // CR Selected Account
-        // -------------------------------------
-        await this.loanRepo.insertLedger(
-          {
-            loan_id: loanId,
-            client_id: dto.client_id,
-            company_id: companyIdNum,
-            account_id: dto.account_type,
-            credit: 0,
-            debit: dto.principal_amount,
-            entry_type: "DISBURSEMENT",
-            remarks: "Paid from selected account",
-            status:"debit",
-            type:"account"
-          },
-          conn
-        );
-      }
-        
       });
 
       return {
@@ -698,15 +766,13 @@ export class LoansService {
           // ----------------------------------
 
           const validNominees = (dto.nominees ?? []).filter((nominee) => {
-  return (
-    nominee.nominee_name?.trim() ||
-    nominee.nominee_relation?.trim() ||
-    nominee.nominee_address?.trim() ||
-    nominee.nominee_phone?.trim()
-  );
-});
-
-
+            return (
+              nominee.nominee_name?.trim() ||
+              nominee.nominee_relation?.trim() ||
+              nominee.nominee_address?.trim() ||
+              nominee.nominee_phone?.trim()
+            );
+          });
 
           await this.syncNominees(
             loanId,

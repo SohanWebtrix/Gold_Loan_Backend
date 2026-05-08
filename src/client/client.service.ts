@@ -577,7 +577,30 @@ export class ClientService {
         throw new BadRequestException("Client id is missing");
       }
 
-      const result = await this.clientRepo.deletClientId(Cid);
+      const result = await this.clientRepo.deletClientPermanately(Cid);
+
+      // If no rows were deleted
+      if (!result || result.affectedRows === 0) {
+        throw new BadRequestException("Client not found or already deleted");
+      }
+
+      return { message: "Client deleted successfully" };
+    }
+    catch (error) {
+
+      console.error("delete Client error is", error);
+      throw new InternalServerErrorException("Failed to Delete Client");
+
+    }
+  }
+
+  async deleteClientPer(Cid: number) {
+    try {
+      if (!Cid) {
+        throw new BadRequestException("Client id is missing");
+      }
+
+      const result = await this.clientRepo.deletClientPermanately(Cid);
 
       // If no rows were deleted
       if (!result || result.affectedRows === 0) {

@@ -16,6 +16,177 @@ export class LoanRepository {
 
     }
 
+    async searchLoansmob(
+  search: string,
+  page: number,
+  limit: number,
+  companyId: number,
+) {
+
+  const safeLimit = Math.max(1, Number(limit));
+  const safeOffset = Math.max(0, (page - 1) * limit);
+
+  const searchValue = `%${search}%`;
+
+  const sql = `
+    SELECT
+      lo.*,
+
+      CONCAT(
+        c.first_name,
+        ' ',
+        c.last_name
+      ) as client_name,
+
+      c.mobile_no
+
+    FROM loans lo
+
+    LEFT JOIN clients c
+      ON lo.client_id = c.cl_id
+
+    WHERE lo.compl_id = ?
+
+    AND (
+      lo.loan_document_number LIKE ?
+
+      OR c.mobile_no LIKE ?
+
+      OR c.first_name LIKE ?
+
+      OR c.last_name LIKE ?
+
+      OR CONCAT(c.first_name, ' ', c.last_name) LIKE ?
+    )
+
+    ORDER BY lo.loan_id DESC
+
+    LIMIT ? OFFSET ?
+  `;
+
+  const values = [
+    companyId,
+
+    searchValue,
+    searchValue,
+    searchValue,
+    searchValue,
+    searchValue,
+
+    safeLimit,
+    safeOffset,
+  ];
+
+  const rows = await this.db.query(sql, values);
+
+  // COUNT QUERY
+
+  const countSql = `
+    SELECT COUNT(*) as total
+
+    FROM loans lo
+
+    LEFT JOIN clients c
+      ON lo.client_id = c.cl_id
+
+    WHERE lo.compl_id = ?
+
+    AND (
+      lo.loan_document_number LIKE ?
+
+      OR c.mobile_no LIKE ?
+
+      OR c.first_name LIKE ?
+
+      OR c.last_name LIKE ?
+
+      OR CONCAT(c.first_name, ' ', c.last_name) LIKE ?
+    )
+  `;
+
+  const countResult = await this.db.query(
+    countSql,
+    [
+      companyId,
+
+      searchValue,
+      searchValue,
+      searchValue,
+      searchValue,
+      searchValue,
+    ]
+  );
+
+  const totalRecords = countResult[0]?.total || 0;
+      const start = totalRecords === 0 ? 0 : (page - 1) * limit + 1;
+      const end = Math.min(page * limit, totalRecords);
+
+  return {
+    currentPage: page,
+    limit,
+    start,
+    end,
+    totalRecords,
+    totalPages: Math.ceil(totalRecords / limit),
+    data: rows,
+  };
+}
+
+
+    async getLatestAccountBalance(accountId: number, conn: any) {
+
+        const [rows]: any = await conn.query(
+            `
+        SELECT balance_after
+        FROM ledger_entries
+        WHERE account_id = ?
+        AND type = 'account'
+        ORDER BY entry_id DESC
+        LIMIT 1
+        `,
+            [accountId]
+        );
+
+        if (rows.length > 0) {
+            return Number(rows[0].balance_after);
+        }
+
+        const [account]: any = await conn.query(
+            `
+        SELECT opening_balance
+        FROM bank_account
+        WHERE id = ?
+        `,
+            [accountId]
+        );
+
+        return Number(account[0].opening_balance);
+    }
+
+
+
+    async getLatestLoanBalance(loanId: any, conn: any) {
+
+        const [rows]: any = await conn.query(
+            `
+        SELECT balance_after
+        FROM ledger_entries
+        WHERE loan_id = ?
+        AND type = 'loan'
+        ORDER BY entry_id DESC
+        LIMIT 1
+        `,
+            [loanId]
+        );
+
+        if (rows.length > 0) {
+            return Number(rows[0].balance_after);
+        }
+
+        return 0;
+    }
+
+
     async generateNumber(companyId: number, docType: string): Promise<string> {
 
 
@@ -686,6 +857,7 @@ export class LoanRepository {
 
 
     async findAll(page: number, limit: number, userid: number) {
+
         try {
             const safeLimit = Number(limit);
             const safeOffset = Number((page - 1) * limit);
@@ -700,7 +872,13 @@ export class LoanRepository {
                 CONCAT(c1.first_name, ' ', c1.last_name) AS client_name,
                 COALESCE(tp.total_paid_amount, 0) AS total_paid_amount,
                 lo.total_amount - COALESCE(tp.total_paid_amount, 0) AS total_pending_amount,
-                TIMESTAMPDIFF(MONTH, lo.loan_start_date, lo.due_date) AS tenure_months
+               CONCAT(
+             TIMESTAMPDIFF(MONTH, lo.loan_start_date, lo.due_date), ' months ',
+             DATEDIFF(
+                 lo.due_date,
+                DATE_ADD(lo.loan_start_date, INTERVAL TIMESTAMPDIFF(MONTH, lo.loan_start_date, lo.due_date) MONTH)
+                ), ' days'
+            ) AS tenure
             FROM loans lo
             LEFT JOIN clients c1 ON lo.client_id = c1.cl_id
             LEFT JOIN (
@@ -729,7 +907,7 @@ export class LoanRepository {
 
     async getLoanById(loanId: number) {
         try {
-            const rows = await this.db.query(
+            const loanRows = await this.db.query(
                 `
 SELECT 
   l.*,
@@ -740,22 +918,44 @@ SELECT
   c.email,
   c.dob,
   c.gender,
+  c.city,
   CONCAT_WS(' ', cust.first_name, cust.last_name) AS created_by_name,
   YEAR(l.loan_start_date) AS financial_year,
-  l.loan_document_number  as loan_no
-  FROM loans l
-  JOIN clients c ON l.client_id = c.cl_id
+  l.loan_document_number AS loan_no
+FROM loans l
+JOIN clients c ON l.client_id = c.cl_id
 LEFT JOIN customers cust ON l.created_by = cust.customer_id
-WHERE l.loan_id = ? LIMIT 1
-                `,
+WHERE l.loan_id = ?
+LIMIT 1
+            `,
                 [loanId]
             );
-            return rows[0];
-        }
-        catch (error) {
+
+            if (!loanRows.length) {
+                return null;
+            }
+
+            const loan = loanRows[0];
+
+            // Fetch mortgaged items
+            const mortgagedItems = await this.db.query(
+                `
+SELECT *
+FROM mortgaged_items
+WHERE loan_id = ?
+            `,
+                [loanId]
+            );
+
+            // Attach items to loan object
+            loan.mortgaged_items = mortgagedItems;
+
+            return loan;
+
+        } catch (error) {
             Sentry.captureException(error);
 
-            console.error("get loan by id erros is", error)
+            console.error("get loan by id error is", error);
             throw error;
         }
     }
@@ -806,15 +1006,23 @@ WHERE l.loan_id = ? LIMIT 1
 
             const rows = await this.db.query(
                 `
-SELECT 
+SELECT
   m.*,
   CONCAT_WS(' ', c.first_name, c.last_name) AS borrower,
   c.caste,
   c.client_code,
   c.mobile_no,
+  c.street_add1,
+  c.city,
   CONCAT_WS(' ', cust.first_name, cust.last_name) AS created_by_name,
-  YEAR(l.loan_start_date) AS financial_year,
-  l.loan_document_number  as loan_no
+  CONCAT(
+  YEAR(l.loan_start_date),
+  '-',
+  LPAD(RIGHT(YEAR(l.loan_start_date) + 1, 2), 2, '0')
+) AS financial_year,
+  l.loan_document_number  as loan_no,
+  l.interest_rate,
+  l.due_date
 FROM mortgaged_items m
 JOIN loans l ON m.loan_id = l.loan_id
 JOIN clients c ON l.client_id = c.cl_id

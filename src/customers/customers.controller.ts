@@ -54,7 +54,8 @@ export class CustomersController {
         files: {
             profile_picture?: MulterFile[];
         },
-    ): Promise<any> {
+    ): Promise<any> 
+    {
         const staffIdNum = Number(staffId);
         const userId = req.user.userId;
         const profileFile = files?.profile_picture?.[0];

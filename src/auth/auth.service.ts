@@ -52,7 +52,11 @@ export class AuthService {
 
                 const companyResult: any = await this.authRepo.insertCompany(dto, userId,conn);
 
-                const company_id = companyResult.insertId;
+                console.log("comapny result is",companyResult);
+
+                const company_id = companyResult[0].insertId;
+
+                console.log("company id is",company_id);
 
                 // 2️⃣ Insert into customer table with company_id
                 await this.authRepo.insertCustomer(

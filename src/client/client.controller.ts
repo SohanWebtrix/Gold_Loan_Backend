@@ -1,5 +1,5 @@
 /* eslint-disable prettier/prettier */
-import { Body, Controller, Get, Headers, Param, ParseIntPipe, Post, Put, Query, Req, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, ParseIntPipe, Post, Put, Query, Req, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ClientService } from './client.service';
 import { AuthGuard } from '@nestjs/passport';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
@@ -95,7 +95,6 @@ async searchCities(
         const photoFile = files?.passport_photo?.[0];
         const companyIdNum = Number(companyId);
 
-
         const userId = req.user.userId;
 
         return this.clientService.createClient(
@@ -170,6 +169,15 @@ async searchCities(
     async deleteClient(@Param('id', ParseIntPipe) id: number,) {
 
         return this.clientService.deleteClient(id)
+
+    }
+
+
+        @Delete('delete_client_permanatly/:id')
+    async deleteClientPermanately(@Param('id', ParseIntPipe) id: number,) {
+
+        return this.clientService.deleteClientPer(id)
+
     }
 
     @Post("search-client")

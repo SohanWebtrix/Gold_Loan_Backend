@@ -1,9 +1,9 @@
 /* eslint-disable prettier/prettier */
-
 import { Injectable } from "@nestjs/common";
 import { DatabaseService } from "src/database/database.service";
 import { OPERATOR_SQL } from "src/filter/operator.map";
 import * as Sentry from '@sentry/node';
+import { LEDURE_FILTER_SCHEMA } from "../ledure.schema";
 
 @Injectable()
 export class LedureRepository {
@@ -120,8 +120,81 @@ export class LedureRepository {
         }
     }
 
-    async getLedgerByClientId(clientId: number, companyId: number, page?: number, limit?: number) {
+    async getLedgerByClientId(clientId: number, companyId: number, page?: number, limit?: number, filters: any[] = []) {
+        
         try {
+            const where: string[] = ['le.client_id = ?', 'le.company_id = ?'];
+            const values: any[] = [clientId, companyId];
+
+            filters.forEach((f) => {
+                const schema = LEDURE_FILTER_SCHEMA[f.field];
+
+                if (!schema) {
+                    throw new Error(`Invalid filter field: ${f.field}`);
+                }
+
+                if (!schema.operators.includes(f.operator)) {
+                    throw new Error(`Invalid operator for field: ${f.field}`);
+                }
+
+                let value = f.value;
+
+                // EMPTY
+                if (f.operator === 'isEmpty') {
+                    where.push(`(${schema.column} IS NULL OR ${schema.column} = '')`);
+                    return;
+                }
+
+                // NOT EMPTY
+                if (f.operator === 'is_not_empty') {
+                    where.push(`(${schema.column} IS NOT NULL AND ${schema.column} != '')`);
+                    return;
+                }
+
+                // DATE
+                if (schema.type === 'date') {
+                    const startOfDay = `${f.value} 00:00:00`;
+                    const endOfDay = `${f.value} 23:59:59`;
+
+                    if (f.operator === 'equals') {
+                        where.push(`(${schema.column} BETWEEN ? AND ?)`);
+                        values.push(startOfDay, endOfDay);
+                        return;
+                    }
+
+                    if (f.operator === 'before') {
+                        where.push(`${schema.column} < ?`);
+                        values.push(startOfDay);
+                        return;
+                    }
+
+                    if (f.operator === 'after') {
+                        where.push(`${schema.column} > ?`);
+                        values.push(endOfDay);
+                        return;
+                    }
+
+                    if (f.operator === 'between') {
+                        const startDate = `${f.value} 00:00:00`;
+                        const endDate = `${f.valueTo} 23:59:59`;
+
+                        where.push(`(${schema.column} BETWEEN ? AND ?)`);
+                        values.push(startDate, endDate);
+                        return;
+                    }
+                }
+
+                // LIKE
+                if (f.operator === 'contains') value = `%${value}%`;
+                if (f.operator === 'starts_with') value = `${value}%`;
+                if (f.operator === 'ends_with') value = `%${value}`;
+
+                if (schema.type === 'number') value = Number(value);
+
+                where.push(`${schema.column} ${OPERATOR_SQL[f.operator]} ?`);
+                values.push(value);
+            });
+
             let sql = `
               SELECT le.*,
                 CONCAT(c1.first_name, ' ', c1.last_name) AS client_name,
@@ -131,12 +204,9 @@ export class LedureRepository {
               LEFT JOIN clients c1 ON le.client_id = c1.cl_id
               LEFT JOIN bank_account ac ON le.account_id = ac.id
               LEFT JOIN loans l ON le.loan_id = l.loan_id
-              WHERE le.client_id = ?
-                AND le.company_id = ?
-              ORDER BY le.entry_id DESC
+              WHERE ${where.join(' AND ')}
+              ORDER BY l.loan_document_number DESC, le.entry_id DESC
             `;
-
-            const values: any[] = [clientId, companyId];
 
             if (page && limit) {
                 const safeLimit = Math.max(1, Number(limit));
@@ -154,16 +224,88 @@ export class LedureRepository {
         }
     }
 
-    async getLedgerCountByClientId(clientId: number, companyId: number) {
+    async getLedgerCountByClientId(clientId: number, companyId: number, filters: any[] = []) {
         try {
+            const where: string[] = ['le.client_id = ?', 'le.company_id = ?'];
+            const values: any[] = [clientId, companyId];
+
+            filters.forEach((f) => {
+                const schema = LEDURE_FILTER_SCHEMA[f.field];
+
+                if (!schema) {
+                    throw new Error(`Invalid filter field: ${f.field}`);
+                }
+
+                if (!schema.operators.includes(f.operator)) {
+                    throw new Error(`Invalid operator for field: ${f.field}`);
+                }
+
+                let value = f.value;
+
+                // EMPTY
+                if (f.operator === 'isEmpty') {
+                    where.push(`(${schema.column} IS NULL OR ${schema.column} = '')`);
+                    return;
+                }
+
+                // NOT EMPTY
+                if (f.operator === 'is_not_empty') {
+                    where.push(`(${schema.column} IS NOT NULL AND ${schema.column} != '')`);
+                    return;
+                }
+
+                // DATE
+                if (schema.type === 'date') {
+                    const startOfDay = `${f.value} 00:00:00`;
+                    const endOfDay = `${f.value} 23:59:59`;
+
+                    if (f.operator === 'equals') {
+                        where.push(`(${schema.column} BETWEEN ? AND ?)`);
+                        values.push(startOfDay, endOfDay);
+                        return;
+                    }
+
+                    if (f.operator === 'before') {
+                        where.push(`${schema.column} < ?`);
+                        values.push(startOfDay);
+                        return;
+                    }
+
+                    if (f.operator === 'after') {
+                        where.push(`${schema.column} > ?`);
+                        values.push(endOfDay);
+                        return;
+                    }
+
+                    if (f.operator === 'between') {
+                        const startDate = `${f.value} 00:00:00`;
+                        const endDate = `${f.valueTo} 23:59:59`;
+
+                        where.push(`(${schema.column} BETWEEN ? AND ?)`);
+                        values.push(startDate, endDate);
+                        return;
+                    }
+                }
+
+                // LIKE
+                if (f.operator === 'contains') value = `%${value}%`;
+                if (f.operator === 'starts_with') value = `${value}%`;
+                if (f.operator === 'ends_with') value = `%${value}`;
+
+                if (schema.type === 'number') value = Number(value);
+
+                where.push(`${schema.column} ${OPERATOR_SQL[f.operator]} ?`);
+                values.push(value);
+            });
+
             const sql = `
               SELECT COUNT(*) as total
               FROM ledger_entries le
-              WHERE le.client_id = ?
-                AND le.company_id = ?
+              LEFT JOIN loans l ON le.loan_id = l.loan_id
+              WHERE ${where.join(' AND ')}
             `;
 
-            const rows = await this.db.query(sql, [clientId, companyId]);
+            const rows = await this.db.query(sql, values);
             return rows[0]?.total || 0;
         } catch (error) {
             Sentry.captureException(error);
@@ -250,7 +392,7 @@ export class LedureRepository {
                 LEFT JOIN bank_account ac ON le.account_id = ac.id
                 LEFT JOIN loans l ON le.loan_id=l.loan_id
                     ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-                    ORDER BY le.entry_id DESC
+                    ORDER BY l.loan_document_number DESC, le.entry_id DESC
                     LIMIT ${safeLimit} OFFSET ${safeOffset}
                   `;
 

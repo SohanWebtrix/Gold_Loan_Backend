@@ -12,7 +12,7 @@ export class LoansController {
 
     }
 
-
+    
     @Post('create_loan')
     @UseGuards(AuthGuard('jwt'))
 
@@ -80,6 +80,7 @@ export class LoansController {
     ) {
 
         const companyIdNum = Number(companyId);
+        console.log("comapny id in loan list is",companyIdNum)
 
         const userid = req.user.userId;
 
@@ -157,11 +158,12 @@ export class LoansController {
         @Headers('comp-id') companyId: string,
         @Query('page') page = '1',
         @Query('limit') limit = '10',
+        @Body('filters') filters: any[] = [],
     ) {
         const companyIdNum = Number(companyId);
         const pageNum = Number(page);
         const limitNum = Number(limit);
-        return this.loanServ.getClientLoanSummary(clientId, companyIdNum, pageNum, limitNum);
+        return this.loanServ.getClientLoanSummary(clientId, companyIdNum, pageNum, limitNum, filters);
     }
 
     @Post("search-loan")
@@ -176,4 +178,25 @@ export class LoansController {
         return this.loanServ.searchLoans(search, Number(page),
             Number(limit), companyIdNum);
     }
+
+
+
+    @Post('searchLoansmobile')
+@UseGuards(AuthGuard('jwt'))
+async searchLoans(
+  @Query('page') page = '1',
+  @Query('limit') limit = '10',
+
+  @Body('search') search: string,
+
+  @Headers('comp-id') companyId: string,
+) {
+
+  return this.loanServ.searchLoansmobile(
+    search,
+    Number(page),
+    Number(limit),
+    Number(companyId),
+  );
+}
 }

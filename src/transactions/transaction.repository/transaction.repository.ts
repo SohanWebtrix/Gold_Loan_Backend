@@ -13,6 +13,59 @@ export class TransactionRepository {
 
     }
 
+        async getLatestAccountBalance(accountId: number, conn: any) {
+
+    const [rows]: any = await conn.query(
+        `
+        SELECT balance_after
+        FROM ledger_entries
+        WHERE account_id = ?
+        AND type = 'account'
+        ORDER BY entry_id DESC
+        LIMIT 1
+        `,
+        [accountId]
+    );
+
+    if (rows.length > 0) {
+        return Number(rows[0].balance_after);
+    }
+
+    const [account]: any = await conn.query(
+        `
+        SELECT opening_balance
+        FROM bank_account
+        WHERE id = ?
+        `,
+        [accountId]
+    );
+
+    return Number(account[0].opening_balance);
+}
+
+
+async getLatestLoanBalance(loanId: any, conn: any) {
+
+    const [rows]: any = await conn.query(
+        `
+        SELECT balance_after
+        FROM ledger_entries
+        WHERE loan_id = ?
+        AND type = 'loan'
+        ORDER BY entry_id DESC
+        LIMIT 1
+        `,
+        [loanId]
+    );
+
+    if (rows.length > 0) {
+        return Number(rows[0].balance_after);
+    }
+
+    return 0;
+}
+
+
     async insertLedger(
         data: any,
         conn: any,
@@ -385,7 +438,7 @@ LIMIT 1
 
             const loanRows = await this.db.query(
                 `
-             SELECT client_id,principal_amount,interest_amount,total_amount, overdue_amount,loan_status from loans WHERE loan_id = ? LIMIT 1
+             SELECT client_id,principal_amount,interest_amount,total_amount, overdue_amount,loan_status,due_date,duration_unit,interest_rate,total_topup_amount from loans WHERE loan_id = ? LIMIT 1
               `,
                 [loanId]
             );
@@ -598,6 +651,7 @@ LIMIT 1
                 `
             SELECT 
                 cl_id,
+                client_code,
                 CONCAT(first_name, ' ', last_name) AS full_name
             FROM clients
             WHERE compc_id = ?
@@ -634,11 +688,14 @@ LIMIT 1
                 `
 SELECT
     l.loan_id,
+    l.loan_start_date,
+    l.interest_rate,
 
     COALESCE(lt.principal_balance, l.principal_amount) AS principal_amount,
-    COALESCE(lt.interest_balance, l.interest_amount) AS interest_amount,
+        lt.transaction_date AS last_transaction_date,
 
     l.loan_status,
+    l.loan_document_number,
 
     m.gold_item_id,
     m.category,
@@ -652,6 +709,8 @@ LEFT JOIN (
     INNER JOIN (
         SELECT loan_id, MAX(transaction_id) AS max_id
         FROM loan_transactions
+        WHERE company_id = ?
+        AND client_id = ?
         GROUP BY loan_id
     ) t2
     ON t1.loan_id = t2.loan_id
@@ -667,7 +726,12 @@ AND l.compl_id = ?
 
 ORDER BY l.loan_id DESC
             `,
-                [clientId, companyId]
+                [
+                    companyId,
+                    clientId,
+                    clientId,
+                    companyId
+                ]
             );
 
             return rows;
@@ -683,6 +747,7 @@ ORDER BY l.loan_id DESC
     async getClientLoanSummary(clientId: number, companyId: number) {
 
         try {
+
             const rows = await this.db.query(
                 `
 SELECT
@@ -690,9 +755,19 @@ SELECT
   l.loan_document_number,
   l.principal_amount,
   l.interest_amount,
+  l.loan_start_date,
   l.total_amount,
   l.interest_rate,
   l.loan_status,
+  l.total_topup_amount,
+    topup.client_total_topup_amount,
+  CONCAT(
+             TIMESTAMPDIFF(MONTH, l.loan_start_date, l.due_date), ' months ',
+             DATEDIFF(
+                 l.due_date,
+                DATE_ADD(l.loan_start_date, INTERVAL TIMESTAMPDIFF(MONTH, l.loan_start_date, l.due_date) MONTH)
+                ), ' days'
+            ) AS tenure,
   COALESCE(SUM(CASE WHEN t.status = 'SUCCESS' THEN t.paid_amount ELSE 0 END), 0) AS total_paid_amount,
   COALESCE(SUM(CASE WHEN t.status = 'SUCCESS' THEN t.principal_paid ELSE 0 END), 0) AS total_paid_principal,
   COALESCE(SUM(CASE WHEN t.status = 'SUCCESS' THEN t.interest_paid ELSE 0 END), 0) AS total_paid_interest,
@@ -714,9 +789,19 @@ SELECT
   c.last_name,
   c.street_add1,
   c.street_add2
-FROM loans l
-JOIN clients c ON l.client_id = c.cl_id
-JOIN customers cust ON c.created_by = cust.customer_id
+FROM clients c
+LEFT JOIN customers cust ON c.created_by = cust.customer_id
+LEFT JOIN loans l ON l.client_id = c.cl_id AND l.compl_id = ?
+LEFT JOIN (
+   SELECT
+      client_id,
+      compl_id,
+      COALESCE(SUM(total_topup_amount),0) AS client_total_topup_amount
+   FROM loans
+   GROUP BY client_id, compl_id
+) topup
+  ON topup.client_id = c.cl_id
+ AND topup.compl_id = ?
 LEFT JOIN loan_transactions t
   ON l.loan_id = t.loan_id
   AND t.company_id = ?
@@ -737,18 +822,9 @@ LEFT JOIN (
   ON t2.loan_id = latest.loan_id
   AND t2.transaction_id = latest.max_tx
 ) lt ON l.loan_id = lt.loan_id
-WHERE l.client_id = ?
-  AND l.compl_id = ?
+WHERE c.cl_id = ?
 GROUP BY
-  l.loan_id,
-  l.loan_document_number,
-  l.principal_amount,
-  l.interest_amount,
-  l.total_amount,
-  l.interest_rate,
-  lt.principal_balance,
-  lt.interest_balance,
-  lt.total_balance,
+  c.cl_id,
   c.client_code,
   c.caste,
   c.occupation,
@@ -758,14 +834,27 @@ GROUP BY
   c.gender,
   c.status,
   c.created_date,
-  c.created_by,
   c.first_name,
   c.last_name,
   c.street_add1,
-  c.street_add2
+  c.street_add2,
+  l.loan_id,
+  l.loan_document_number,
+  l.principal_amount,
+  l.interest_amount,
+  l.total_amount,
+  l.interest_rate,
+  lt.principal_balance,
+  lt.interest_balance,
+  lt.total_balance,
+  l.loan_status,
+l.total_topup_amount,
+topup.client_total_topup_amount,
+cust.first_name,
+cust.last_name
 ORDER BY l.loan_id DESC
                 `,
-                [companyId, clientId, companyId, clientId, clientId, companyId]
+                [companyId, companyId, companyId, clientId, companyId, clientId, clientId]
             );
 
             //             loans                    → The loan itself (what was given)

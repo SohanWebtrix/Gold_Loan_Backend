@@ -283,15 +283,19 @@ export class CustomersRepository {
             });
 
             const sql = `
-              SELECT COUNT(*) as total
-              FROM clients cl
-              LEFT JOIN customers a ON cl.created_by = a.customer_id
-              LEFT JOIN customers a2 ON cl.modified_by = a2.customer_id
-               LEFT JOIN ab_cities ct ON cl.city = ct.city_id
-              LEFT JOIN ab_states st ON cl.state = st.state_id
-                 LEFT JOIN company cm on cs.comp_id=cm.company_id
-                GROUP BY cs.customer_id
-              ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+                  SELECT count(*)as total,
+                ct.city_name AS city_name,
+                st.state_name AS state_name,
+                cm.company_name as company_name,
+                cm.company_mobile as company_mobile,
+                cm.company_email as company_email
+              FROM customers cs
+              LEFT JOIN ab_cities ct ON cs.city = ct.city_id
+              LEFT JOIN ab_states st ON cs.state = st.state_id
+              LEFT JOIN company cm on cs.comp_id=cm.company_id
+              
+                            ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+
             `;
 
             const result = await this.db.query(sql, values);
@@ -372,23 +376,19 @@ export class CustomersRepository {
             const safeOffset = Math.max(0, Number((page - 1) * limit));
 
             const sql = `
-                SELECT cl.*,
-                    a.cust_name AS created_by_name,
-                a2.cust_name AS modified_by_name,
-                 ct.city_name AS city_name,
+               SELECT cs.*,
+                ct.city_name AS city_name,
                 st.state_name AS state_name,
-                  cm.company_name as company_name,
+                cm.company_name as company_name,
                 cm.company_mobile as company_mobile,
                 cm.company_email as company_email
-                FROM clients cl
-                   LEFT JOIN customers a ON cl.created_by = a.customer_id
-              LEFT JOIN customers a2 ON cl.modified_by = a2.customer_id
-               LEFT JOIN ab_cities ct ON cl.city = ct.city_id
-              LEFT JOIN ab_states st ON cl.state = st.state_id
-                            LEFT JOIN company cm on cs.comp_id=cm.company_id
+              FROM customers cs
+              LEFT JOIN ab_cities ct ON cs.city = ct.city_id
+              LEFT JOIN ab_states st ON cs.state = st.state_id
+              LEFT JOIN company cm on cs.comp_id=cm.company_id
 
                 ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-                ORDER BY cl.cl_id DESC
+                ORDER BY cs.customer_id DESC
                 LIMIT ${safeLimit} OFFSET ${safeOffset}
               `;
 
@@ -481,7 +481,7 @@ export class CustomersRepository {
     async getFilteredCountCustid(filters: any[], compid: number) {
 
 
-                console.log("inside count with  filters cust id method");
+        console.log("inside count with  filters cust id method");
 
         try {
             const where: string[] = ['cs.comp_id=?'];

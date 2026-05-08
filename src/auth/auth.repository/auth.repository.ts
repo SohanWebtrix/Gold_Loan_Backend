@@ -119,7 +119,7 @@ export class AuthRepository {
           VALUES ?
         `;
 
-            const result = await db.bulkQuery(sql, [values]);
+            const result = await db.query(sql, [values]);
 
             return result;
 
@@ -534,7 +534,7 @@ export class AuthRepository {
 
         const rows = await this.db.query<ResultSetHeader>(
             `
-  SELECT admin_id, admin_name, admin_email, admin_password,status,admin_phone 
+  SELECT admin_id, first_name,last_name, admin_email, admin_password,status,admin_phone 
   FROM admins 
   WHERE (admin_phone = ? OR user_name = ?) 
   LIMIT 1

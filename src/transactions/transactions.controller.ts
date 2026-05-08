@@ -17,12 +17,12 @@ export class TransactionsController {
         @Query('limit') limit = '10',
         @Body('filters') filters: any[] = [],
         @Req() req: any,
-                @Headers('comp-id') companyId: string,
+        @Headers('comp-id') companyId: string,
 
     ) {
 
         const userid = req.user.userId;
-                const companyIdNum = Number(companyId);
+        const companyIdNum = Number(companyId);
 
         return this.transactionService.getTransactionList(
             Number(page),
@@ -32,21 +32,20 @@ export class TransactionsController {
         );
     }
 
-
     @Post('create_transaction')
     @UseGuards(AuthGuard('jwt'))
     @UseInterceptors(FileFieldsInterceptor([
-        {name:'payment_proof_file',maxCount:1}])
+        { name: 'payment_proof_file', maxCount: 1 }])
     )
     async CreateTransaction(@Body() dto: any,
         @Headers('comp-id') companyId: string,
         @Req() req: any,
-          @UploadedFiles()
-                files: {
-                    payment_proof_file?: Express.Multer.File[];
-                },
+        @UploadedFiles()
+        files: {
+            payment_proof_file?: Express.Multer.File[];
+        },
     ) {
-        const paymentproof=files?.payment_proof_file?.[0];
+        const paymentproof = files?.payment_proof_file?.[0];
         const companyIdNum = Number(companyId);
         console.log("company Id is", companyIdNum);
         const userId = req.user.userId;
@@ -73,26 +72,45 @@ export class TransactionsController {
     async searchByName(@Query("search") search: string, @Req() req: any, @Headers('comp-id') companyId: string,
 
     ) {
-
         const userid = req.user.userId;
         const companyIdNum = Number(companyId);
-
         return this.transactionService.searchClient(search, companyIdNum);
     }
 
-    @Get("client_loans/:clientId")
-    @UseGuards(AuthGuard('jwt'))
-    async getClientLoans(
-        @Param("clientId") clientId: string,
-        @Headers("comp-id") companyId: string
-    ) {
-        return this.transactionService.getClientLoans(
-            Number(clientId),
-            Number(companyId)
-        );
-    }
+    // @Get("client_loans/:clientId")
+    // @UseGuards(AuthGuard('jwt'))
+    // async getClientLoans(
+    //     @Param("clientId") clientId: string,
+    //     @Headers("comp-id") companyId: string
+    // ) {
 
-     @Get("tranasactionrecipt/:transactionId")
+    //     return this.transactionService.getClientLoans(
+    //         Number(clientId),
+    //         Number(companyId)
+    //     );
+        
+    // }
+
+    @Get("client_loans/:clientId")
+@UseGuards(AuthGuard('jwt'))
+async getClientLoans(
+    @Param("clientId") clientId: string,
+
+    @Headers("comp-id") companyId: string,
+
+    @Query("transaction_date")
+    transactionDate?: string
+) {
+
+    return this.transactionService.getClientLoans(
+        Number(clientId),
+        Number(companyId),
+        transactionDate
+    );
+
+}
+
+    @Get("tranasactionrecipt/:transactionId")
     @UseGuards(AuthGuard('jwt'))
     async getRecipt(
         @Param("transactionId") transctionId: string,
