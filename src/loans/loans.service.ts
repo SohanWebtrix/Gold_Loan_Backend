@@ -93,7 +93,9 @@ export class LoansService {
   }
 
   async getClientLoanSummary(clientId: number, companyId: number, page: number = 1, limit: number = 10, filters: any[] = []) {
+
     try {
+
       const loans = await this.transactionRepo.getClientLoanSummary(clientId, companyId);
 
       const validLoans = (loans || []).filter(
@@ -115,9 +117,19 @@ export class LoansService {
         const pendingPrincipal = Number(
           loan.current_principal_balance ?? (principalAmount - totalPaidPrincipal)
         );
-        const pendingInterest = Number(
-          loan.current_interest_balance ?? (interestAmount - totalPaidInterest)
-        );
+
+        // const pendingInterest = Number(
+        //  loan.current_interest_balance ?? (interestAmount - totalPaidInterest)
+        // );
+
+        const pendingInterest =
+  loan.loan_status === 'close'
+    ? 0
+    : Number(
+        loan.current_interest_balance ??
+        (interestAmount - totalPaidInterest)
+      );
+
 
         const pendinginterestdaily = Number(loan.accrued_interest ?? 0);
 
@@ -488,6 +500,23 @@ export class LoansService {
       dto.total_amount =
         Number(dto.principal_amount);
 
+     const todayObj = DateTime.now()
+  .setZone('Asia/Kolkata')
+  .startOf('day');
+
+const todaySql = todayObj.toFormat('yyyy-MM-dd');
+
+const dueDate = DateTime.fromISO(dto.due_date)
+  .setZone('Asia/Kolkata')
+  .startOf('day');
+
+if (dueDate.toMillis() < todayObj.toMillis()) {
+  dto.loan_status = "overdue";
+} else {
+  dto.loan_status = "active";
+}
+
+
       const loanRes = await this.loanRepo.insertLoan(dto, userId);
       console.log("loan id in loanRes is", loanRes)
 
@@ -560,18 +589,6 @@ export class LoansService {
         })
       );
 
- const today = DateTime.now()
-  .setZone('Asia/Kolkata')
-  .toFormat('yyyy-MM-dd');
-
-const dueDate = DateTime.fromISO(dto.due_date)
-  .setZone('Asia/Kolkata')
-  .startOf('day');
-
-if (dueDate < DateTime.now().setZone('Asia/Kolkata').startOf('day')) {
-  dto.loan_status = "overdue";
-}
-
       // STEP 4: Transaction only for child tables
       await this.db.transaction(async (conn) => {
 
@@ -620,7 +637,7 @@ if (dueDate < DateTime.now().setZone('Asia/Kolkata').startOf('day')) {
               Number(dto.principal_amount)
               + Number(result.accruedInterest),
 
-            last_interest_date: today
+            last_interest_date: todaySql
           },
           conn
         );
@@ -693,6 +710,7 @@ if (dueDate < DateTime.now().setZone('Asia/Kolkata').startOf('day')) {
           const accountBalanceAfter =
             accountBalance - loanAmount;
 
+            // await this.loanRepo.updateBankBalance(dto.account_type,accountBalanceAfter,conn)
 
           const loanBalance:any =
             await this.loanRepo.getLatestLoanBalance(
