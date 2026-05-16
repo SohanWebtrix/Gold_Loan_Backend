@@ -560,15 +560,15 @@ export class LoansService {
         })
       );
 
-    const today = DateTime.now()
+ const today = DateTime.now()
   .setZone('Asia/Kolkata')
-  .startOf('day');
+  .toFormat('yyyy-MM-dd');
 
 const dueDate = DateTime.fromISO(dto.due_date)
   .setZone('Asia/Kolkata')
   .startOf('day');
 
-if (dueDate < today) {
+if (dueDate < DateTime.now().setZone('Asia/Kolkata').startOf('day')) {
   dto.loan_status = "overdue";
 }
 
