@@ -47,7 +47,6 @@ export class TransactionsController {
     ) {
         const paymentproof = files?.payment_proof_file?.[0];
         const companyIdNum = Number(companyId);
-        console.log("company Id is", companyIdNum);
         const userId = req.user.userId;
 
         return this.transactionService.createTransaction(
@@ -64,7 +63,6 @@ export class TransactionsController {
         @Param('id', ParseIntPipe) id: number) {
         return this.transactionService.getLoanById(id)
     }
-
 
 
     @Post("search_client_transaction")
@@ -120,6 +118,29 @@ async getClientLoans(
             Number(transctionId),
             Number(companyId)
         );
+        
     }
+
+
+        @Post('searchTranasactionMobile')
+@UseGuards(AuthGuard('jwt'))
+async searchTransactionMobile(
+  @Query('page') page = '1',
+  @Query('limit') limit = '10',
+
+  @Body('search') search: string,
+
+  @Headers('comp-id') companyId: string,
+) {
+  
+  return this.transactionService.searchTransactionsmobile(
+    search,
+    Number(page),
+    Number(limit),
+    Number(companyId),
+  );
+
+}
+
 
 }

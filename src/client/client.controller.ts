@@ -118,7 +118,6 @@ async searchCities(
     ) {
 
         const companyIdNum = Number(companyId);
-        console.log("company id is", companyIdNum);
 
         const userid = req.user.userId;
 

@@ -5,6 +5,7 @@ import { OPERATOR_SQL } from "src/filter/operator.map";
 import { DateTime } from 'luxon';
 import * as bcrypt from 'bcrypt';
 import { ResultSetHeader } from "mysql2";
+import * as Sentry from '@sentry/node';
 
 
 @Injectable()
@@ -12,7 +13,62 @@ import { ResultSetHeader } from "mysql2";
 export class CustomersRepository {
 
     constructor(private readonly db: DatabaseService) {
+        
+    }
 
+
+    async getCountforCustomer(customerId: any) {
+
+        try {
+
+        const rows: any = await this.db.query(`SELECT 
+    c.customer_id,
+    c.first_name,
+    c.last_name,
+    c.user_name,
+    c.cust_phone,
+    cm.company_name as company_name,
+
+    -- total clients created
+    COUNT(DISTINCT cl.cl_id) AS total_clients,
+
+    -- total loans
+    COUNT(l.loan_id) AS total_loans,
+
+    -- active loans only
+    COUNT(
+        CASE 
+            WHEN l.loan_status = 'active' 
+            THEN 1 
+        END
+    ) AS active_loans
+
+FROM customers c
+
+LEFT JOIN clients cl 
+    ON cl.created_by = c.customer_id
+
+LEFT JOIN company cm 
+    ON c.comp_id = cm.company_id
+
+LEFT JOIN loans l 
+    ON l.client_id = cl.cl_id
+
+WHERE c.customer_id = ?
+
+GROUP BY c.customer_id;`, [customerId])
+
+return rows[0];
+
+        }
+
+        catch (error) {
+                              Sentry.captureException(error);
+
+
+            console.error("error during getCountforCustomer is", error)
+            throw error;
+        }
     }
 
     async getCustoemrdetails(customerid: number) {
@@ -25,6 +81,8 @@ export class CustomersRepository {
             return rows;
         }
         catch (error) {
+                              Sentry.captureException(error);
+
             console.error("get customer by id error is", error);
             throw error;
         }
@@ -40,6 +98,8 @@ export class CustomersRepository {
             return rows;
         }
         catch (error) {
+                              Sentry.captureException(error);
+
             console.error("get company by id erros is", error)
             throw error;
         }
@@ -55,6 +115,8 @@ export class CustomersRepository {
             );
             return rows[0] || null;
         } catch (error) {
+                              Sentry.captureException(error);
+
             console.error('getStaffById error', error);
             throw error;
         }
@@ -110,6 +172,8 @@ export class CustomersRepository {
 
             return result;
         } catch (error) {
+                              Sentry.captureException(error);
+
             console.error('insertStaff error', error);
             throw error;
         }
@@ -162,6 +226,8 @@ export class CustomersRepository {
 
             return result;
         } catch (error) {
+                                          Sentry.captureException(error);
+
             console.error('updateStaff error', error);
             throw error;
         }
@@ -196,6 +262,8 @@ export class CustomersRepository {
             return result;
 
         } catch (error) {
+                                          Sentry.captureException(error);
+
             console.error('updateStaff error', error);
             throw error;
 
@@ -211,6 +279,8 @@ export class CustomersRepository {
             );
             return result;
         } catch (error) {
+                                          Sentry.captureException(error);
+
             console.error('deleteStaff error', error);
             throw error;
         }
@@ -302,6 +372,8 @@ export class CustomersRepository {
             return result[0]?.total ?? 0;
         }
         catch (error) {
+
+                                          Sentry.captureException(error);
 
             console.error("getFilteredCount is", error)
         }
@@ -397,6 +469,8 @@ export class CustomersRepository {
         }
         catch (error) {
 
+                                          Sentry.captureException(error);
+
             console.error("FindWithFilters error is", error)
         }
     }
@@ -433,6 +507,8 @@ export class CustomersRepository {
             return rows;
         }
         catch (error) {
+
+                                          Sentry.captureException(error);
 
             console.error("findAll is", error)
             throw error
@@ -471,6 +547,8 @@ export class CustomersRepository {
             return rows;
         }
         catch (error) {
+
+                                          Sentry.captureException(error);
 
             console.error("findAll is", error)
             throw error
@@ -560,6 +638,8 @@ export class CustomersRepository {
             return result[0]?.total ?? 0;
         }
         catch (error) {
+
+                                          Sentry.captureException(error);
 
             console.error("getFilteredCount is", error)
         }
@@ -657,6 +737,8 @@ export class CustomersRepository {
         }
         catch (error) {
 
+                                          Sentry.captureException(error);
+
             console.error("FindWithFilters error is", error)
         }
     }
@@ -675,6 +757,9 @@ export class CustomersRepository {
         }
 
         catch (error) {
+
+                                          Sentry.captureException(error);
+
 
             console.error("getTotalCount error is", error)
             throw error;
@@ -696,6 +781,8 @@ export class CustomersRepository {
         }
 
         catch (error) {
+                                          Sentry.captureException(error);
+
 
             console.error("getTotalCount error is", error)
             throw error;

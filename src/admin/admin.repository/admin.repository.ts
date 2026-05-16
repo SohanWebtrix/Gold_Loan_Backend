@@ -6,12 +6,31 @@ import * as bcrypt from 'bcrypt';
 import { ResultSetHeader } from "mysql2";
 import { ConflictException, Injectable, InternalServerErrorException } from "@nestjs/common";
 import { OPERATOR_SQL } from "src/filter/operator.map";
+import * as Sentry from '@sentry/node';
 
 
 @Injectable()
 export class AdminRepository {
 
     constructor(private readonly db: DatabaseService) { }
+
+
+    
+        async getAdminByid(aid: number) {
+            try {
+                const rows = await this.db.query(
+                    `SELECT * from admins WHERE admin_id = ? LIMIT 1`,
+                    [aid]
+                );
+                return rows;
+            }
+            catch (error) {
+                Sentry.captureException(error);
+    
+                console.error("get admin by id erros is", error)
+                throw error;
+            }
+        }
 
 
     async insertAdmin(data: any, userid: number) {

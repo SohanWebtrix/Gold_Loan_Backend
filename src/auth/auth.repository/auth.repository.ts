@@ -50,7 +50,9 @@ export type CustomerWithCompany = {
     status: number | string | null;
     address_line1: string | null;
     address_line2: string | null;
+    landmark:string|null;
     state: string | null;
+    state_id:number|null;
     city: string | null;
     pincode: string | null;
     cust_phone: string | number | null;
@@ -60,6 +62,7 @@ export type CustomerWithCompany = {
     company_name: string | null;
     company_email: string | null;
     company_mobile: string | null;
+    state_name:string|null;
 };
 
 export type PrefixItem = {
@@ -260,7 +263,7 @@ export class AuthRepository {
                 pincode: data.pincode,
                 cust_phone: data.cust_phone,
                 cust_email: data.cust_email,
-                user_name: data.username,
+                user_name: data.user_name,
             };
 
             Object.entries(customerFields).forEach(([key, value]) => {
@@ -351,7 +354,7 @@ export class AuthRepository {
 
     // Insert Company (Manual Query)
     async insertCompany(data: any, userId: number, conn: any) {
-                const db = conn ?? this.db;
+        const db = conn ?? this.db;
 
         try {
             const company_email = data.company_email || null;
@@ -401,7 +404,7 @@ export class AuthRepository {
         company_id: number,
         conn: any
     ) {
-                const db = conn ?? this.db;
+        const db = conn ?? this.db;
 
         try {
             const cust_password = data.cust_password
@@ -422,15 +425,17 @@ export class AuthRepository {
                 status,
                 address_line1,
                 address_line2,
+                landmark,
                 state,
                 city,
                 pincode,
                 cust_password,
+                user_name,
                 cust_phone,
                 created_by,
                 created_date
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?,?,?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
                 [
                     company_id,
@@ -439,10 +444,12 @@ export class AuthRepository {
                     data.status || 1,
                     data.address_line1 || null,
                     data.address_line2 || null,
+                    data.landmark || null,
                     data.state || null,
                     data.city || null,
                     data.pincode || null,
                     cust_password,
+                    data.user_name,
                     data.cust_phone || null,
                     userId,
                     created_date
@@ -459,18 +466,19 @@ export class AuthRepository {
     }
 
 
-
     async findCustomerWithCompany(customerId: number): Promise<CustomerWithCompany | null> {
         const rows = await this.db.query<CustomerWithCompany[]>(
             `
       SELECT
         cu.*,
+        st.state_name as state_name,
         co.company_id AS company_id,
         co.company_name,
         co.company_email,
         co.company_mobile
       FROM customers cu
       JOIN company co ON cu.comp_id = co.company_id
+      LEFT JOIN ab_states st ON  cu.state=st.state_id
       WHERE cu.customer_id = ?
       LIMIT 1
       `,

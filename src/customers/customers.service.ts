@@ -6,6 +6,8 @@ import { CreateStaffDto } from './create-staff.dto';
 import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as Sentry from '@sentry/node';
+
 
 type MulterFile = {
   originalname: string;
@@ -17,6 +19,30 @@ export class CustomersService {
 
   constructor(private readonly customerRepo: CustomersRepository) {
 
+  }
+
+
+  async getCountbyid(customerid:number)
+  {
+    try{
+      
+    const data= await this.customerRepo.getCountforCustomer(customerid);
+    console.log("data is",data);
+
+    if(!data)
+    {
+      throw new Error ("failed to fetch count ")
+    }
+    return {
+      message:"count fetched succesfully",
+      data,
+    }
+  }
+  catch(error)
+  {
+        Sentry.captureException(error);
+    
+  }
   }
 
   async getClinetById(userId: number) {
@@ -35,6 +61,8 @@ export class CustomersService {
       }
     }
     catch (error) {
+                        Sentry.captureException(error);
+      
       console.error("get user by id error is", error)
     }
   }
@@ -56,6 +84,8 @@ export class CustomersService {
       }
     }
     catch (error) {
+                        Sentry.captureException(error);
+      
       console.error("get customer by id error is", error)
     }
   }
@@ -126,6 +156,8 @@ export class CustomersService {
     }
     catch (error) {
 
+                        Sentry.captureException(error);
+      
       console.error("getBeneficiarylist error", error)
       throw new InternalServerErrorException("Failed to fetch Client list");
 
@@ -200,6 +232,8 @@ export class CustomersService {
     }
     catch (error) {
 
+                        Sentry.captureException(error);
+      
       console.error("getBeneficiarylist error", error)
       throw new InternalServerErrorException("Failed to fetch Client list");
 
@@ -254,6 +288,8 @@ export class CustomersService {
         staff_id: staffId,
       };
     } catch (error) {
+                        Sentry.captureException(error);
+      
       console.error('createStaff error', error);
 
       if (folderPath && fs.existsSync(folderPath)) {
@@ -381,6 +417,9 @@ throw error;
         data: result,
       };
     } catch (error) {
+
+                        Sentry.captureException(error);
+      
       console.error('updateStaff error', error);
 
       await Promise.all(

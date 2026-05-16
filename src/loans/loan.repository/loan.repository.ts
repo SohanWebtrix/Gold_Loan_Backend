@@ -1,5 +1,5 @@
 /* eslint-disable prettier/prettier */
-import { Injectable, InternalServerErrorException } from "@nestjs/common";
+import { Injectable, InternalServerErrorException, NotFoundException } from "@nestjs/common";
 import { DateTime } from "luxon";
 import { ResultSetHeader } from "mysql2";
 import { DatabaseService } from "src/database/database.service";
@@ -22,7 +22,7 @@ export class LoanRepository {
   limit: number,
   companyId: number,
 ) {
-
+try{
   const safeLimit = Math.max(1, Number(limit));
   const safeOffset = Math.max(0, (page - 1) * limit);
 
@@ -130,11 +130,111 @@ export class LoanRepository {
     totalPages: Math.ceil(totalRecords / limit),
     data: rows,
   };
+
+}
+
+  catch(error)
+  {
+                Sentry.captureException(error);
+
+  }
+}
+
+
+async insertDailyInterest(data: any,conn:any) {
+
+    const db = conn ?? this.db;
+try{
+  return db.query(
+    `
+    INSERT IGNORE INTO loan_daily_interest
+    (
+      loan_id,
+      interest_date,
+      daily_interest,
+      accrued_interest
+    )
+    VALUES (?, ?, ?, ?)
+    `,
+    [
+      data.loan_id,
+      data.interest_date,
+      data.daily_interest,
+      data.accrued_interest,
+    ]
+  );
+}
+catch(error)
+{
+                Sentry.captureException(error);
+
+}
+}
+
+async updateLoanInterest(
+  loanId: number|null,
+  data: any,
+  conn:any,
+) {
+
+   try{ 
+    const db = conn ?? this.db;
+
+  return db.query(
+    `
+    UPDATE loans
+    SET
+
+      accrued_interest = ?,
+      total_amount=?,
+        last_interest_date = ?
+    WHERE loan_id = ?
+    `,
+    [
+      data.accrued_interest,
+      data.total_amount,
+      data.last_interest_date,
+      loanId,
+    ]
+  );
+
+}
+
+catch(error)
+{
+                Sentry.captureException(error);
+
+}
+
+}
+
+
+async getActiveLoans() {
+
+    try{
+  return this.db.query(`
+    SELECT
+      loan_id,
+      principal_balance,
+            interest_rate,
+
+      accrued_interest,
+      last_interest_date
+    FROM loans
+    WHERE loan_status = 'active'
+  `);
+    }
+    catch(error)
+    {
+                    Sentry.captureException(error);
+
+    }
 }
 
 
     async getLatestAccountBalance(accountId: number, conn: any) {
 
+        try{
         const [rows]: any = await conn.query(
             `
         SELECT balance_after
@@ -162,11 +262,19 @@ export class LoanRepository {
 
         return Number(account[0].opening_balance);
     }
+    catch(error)
+    {
+                    Sentry.captureException(error);
+
+    }
+
+    }
 
 
 
     async getLatestLoanBalance(loanId: any, conn: any) {
 
+        try{
         const [rows]: any = await conn.query(
             `
         SELECT balance_after
@@ -184,6 +292,12 @@ export class LoanRepository {
         }
 
         return 0;
+    }
+    catch(error)
+    {
+                    Sentry.captureException(error);
+
+    }
     }
 
 
@@ -203,7 +317,7 @@ export class LoanRepository {
             );
 
             if (rows.length === 0) {
-                throw new Error("Sequence configuration not found");
+                throw new NotFoundException("Prefix not set");
             }
 
             const row = rows[0];
@@ -225,7 +339,6 @@ export class LoanRepository {
         catch (error) {
 
             Sentry.captureException(error);
-
 
             throw error;
         } finally {
@@ -871,7 +984,7 @@ export class LoanRepository {
                 lo.*,
                 CONCAT(c1.first_name, ' ', c1.last_name) AS client_name,
                 COALESCE(tp.total_paid_amount, 0) AS total_paid_amount,
-                lo.total_amount - COALESCE(tp.total_paid_amount, 0) AS total_pending_amount,
+                lo.total_amount AS total_pending_amount,
                CONCAT(
              TIMESTAMPDIFF(MONTH, lo.loan_start_date, lo.due_date), ' months ',
              DATEDIFF(
@@ -919,12 +1032,14 @@ SELECT
   c.dob,
   c.gender,
   c.city,
+  cm.company_name,
   CONCAT_WS(' ', cust.first_name, cust.last_name) AS created_by_name,
   YEAR(l.loan_start_date) AS financial_year,
   l.loan_document_number AS loan_no
 FROM loans l
 JOIN clients c ON l.client_id = c.cl_id
 LEFT JOIN customers cust ON l.created_by = cust.customer_id
+LEFT JOIN company cm ON  l.compl_id = cm.company_id
 WHERE l.loan_id = ?
 LIMIT 1
             `,
@@ -1014,6 +1129,7 @@ SELECT
   c.mobile_no,
   c.street_add1,
   c.city,
+  cm.company_name,
   CONCAT_WS(' ', cust.first_name, cust.last_name) AS created_by_name,
   CONCAT(
   YEAR(l.loan_start_date),
@@ -1022,11 +1138,13 @@ SELECT
 ) AS financial_year,
   l.loan_document_number  as loan_no,
   l.interest_rate,
+  l.principal_amount,
   l.due_date
 FROM mortgaged_items m
 JOIN loans l ON m.loan_id = l.loan_id
 JOIN clients c ON l.client_id = c.cl_id
 LEFT JOIN customers cust ON l.created_by = cust.customer_id
+LEFT JOIN company cm ON l.compl_id  = cm.company_id 
 WHERE m.loan_id = ?
                 `,
                 [loanId]

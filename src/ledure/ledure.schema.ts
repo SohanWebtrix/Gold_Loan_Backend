@@ -20,6 +20,7 @@ export const LEDURE_FILTER_SCHEMA = {
         operators: ['equals', 'contains', 'starts_with', 'ends_with', 'isEmpty', 'is_not_empty'],
     },
 
+    
        account_name: {
         column: 'ac.account_type',
         type: 'text',

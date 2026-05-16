@@ -23,6 +23,7 @@ export class CustomersController {
             { name: 'profile_picture', maxCount: 1 },
         ]),
     )
+    
     async createStaff(
         @Body() dto: any,
         @Headers('comp-id') companyId: string,
@@ -70,6 +71,7 @@ export class CustomersController {
             return this.customerService.getCustById(id)
             }
 
+            
     @Post('list')
     @UseGuards(AuthGuard('jwt'))
     async getCustomers(
@@ -79,7 +81,6 @@ export class CustomersController {
         @Headers('comp-id') companyId: string,
     ) {
         const companyIdNum = Number(companyId);
-        console.log("company id is", companyIdNum);
 
         return this.customerService.getCustomerList(
             Number(page),
@@ -88,6 +89,16 @@ export class CustomersController {
             companyIdNum
         );
     }
+
+
+        @Get('get_count/:id')
+    async getCustomerDetailCount(
+        @Param('id', ParseIntPipe) id: number) {
+
+        return this.customerService.getCountbyid(id)
+        
+    }
+
 
 
     @Post('list_cust')
@@ -100,7 +111,6 @@ export class CustomersController {
     ) {
 
         const companyIdNum = Number(companyId);
-        console.log("company id is", companyIdNum);
 
         return this.customerService.getCustomerListByid(
             Number(page),
@@ -109,6 +119,5 @@ export class CustomersController {
             companyIdNum
         );
     }
-
 
 }

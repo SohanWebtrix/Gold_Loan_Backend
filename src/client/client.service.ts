@@ -317,7 +317,6 @@ export class ClientService {
     try {
 
 
-
       // ✅ STEP 1: Insert client FIRST (without file paths)
       const result = await this.db.transaction(async (conn) => {
         const code = await this.clientRepo.generateNumber(companyIdNum, "CLIENT", conn);
@@ -550,6 +549,12 @@ export class ClientService {
       const start = totalRecords === 0 ? 0 : (page - 1) * limit + 1;
       const end = Math.min(page * limit, totalRecords);
 
+      // Round total_loan_amount
+const formattedData = data.map((item) => ({
+  ...item,
+  total_loan_amount: Math.round(Number(item.total_loan_amount || 0)),
+}));
+
       return {
         currentPage: page,
         limit,
@@ -559,7 +564,7 @@ export class ClientService {
         totalPages,
         nextPage: page < totalPages ? page + 1 : null,
         previousPage: page > 1 ? page - 1 : null,
-        data,
+        data:formattedData,
       };
     }
     catch (error) {
@@ -595,16 +600,21 @@ export class ClientService {
   }
 
   async deleteClientPer(Cid: number) {
+
     try {
       if (!Cid) {
         throw new BadRequestException("Client id is missing");
       }
 
       const result = await this.clientRepo.deletClientPermanately(Cid);
-
+      
       // If no rows were deleted
       if (!result || result.affectedRows === 0) {
-        throw new BadRequestException("Client not found or already deleted");
+
+return {
+  success : false,
+  message:"loan exisit for the client"
+}
       }
 
       return { message: "Client deleted successfully" };
@@ -612,9 +622,10 @@ export class ClientService {
     catch (error) {
 
       console.error("delete Client error is", error);
-      throw new InternalServerErrorException("Failed to Delete Client");
+      throw error;
 
     }
+
   }
 
   async searchClientloan(search: string, comapanyid: number) {

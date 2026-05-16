@@ -56,7 +56,6 @@ export class AuthService {
 
                 const company_id = companyResult[0].insertId;
 
-                console.log("company id is",company_id);
 
                 // 2️⃣ Insert into customer table with company_id
                 await this.authRepo.insertCustomer(
@@ -75,7 +74,7 @@ export class AuthService {
 
       return {
                 success: true,
-                message: 'prefix added successfully',
+                message: 'customer added successfully',
       
             };
 
@@ -88,12 +87,17 @@ export class AuthService {
     }
 
     async UpdateCustomer(dto: any, customerIdNumber: number, userId: number) {
+        
         try {
             const companyId = Number(dto.company_id);
 
-            if (!companyId || !customerIdNumber) {
+            console.log("company id inside updateCustomer is",companyId);
+
+            if (!companyId) {
                 throw new BadRequestException('company_id is required');
             }
+
+                        console.log("customer id is",customerIdNumber);
 
             if (!customerIdNumber) {
                 throw new BadRequestException('customer_id are required');
@@ -108,6 +112,7 @@ export class AuthService {
 
                 // Sync prefix records if prefix array is provided
                 if (Array.isArray(dto.prefix)) {
+                    console.log("inside prefix record exists");
                     await this.authRepo.deletePrefixes(companyId, conn);
                     await this.authRepo.insertprefixbulku(dto.prefix, companyId, conn);
                 }
@@ -120,8 +125,10 @@ export class AuthService {
                 customerIdNumber,
             };
         } catch (error) {
+            
             console.error('UpdateCustomer error', error);
             throw error;
+
         }
     }
 
@@ -129,6 +136,8 @@ export class AuthService {
         if (!customerId || Number.isNaN(customerId)) {
             throw new BadRequestException('customer_id is required');
         }
+
+        console.log("customer id is inside customer detals",customerId)
 
         const customer = await this.authRepo.findCustomerWithCompany(customerId);
         if (!customer) {
@@ -147,12 +156,14 @@ export class AuthService {
                 status: customer.status,
                 address_line1: customer.address_line1,
                 address_line2: customer.address_line2,
-                state: customer.state,
+                state_name: customer.state_name,
+                state:customer.state_id,
                 city: customer.city,
                 pincode: customer.pincode,
                 cust_phone: customer.cust_phone,
                 cust_email: customer.cust_email,
                 user_name: customer.user_name,
+                landmark:customer.landmark
             },
             company: {
                 company_id: customer.company_id,

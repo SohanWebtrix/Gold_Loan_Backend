@@ -8,8 +8,16 @@ export const CUSTOMER_FILTER_SCHEMA = {
     operators: ['equals', 'contains', 'starts_with', 'ends_with', 'isEmpty', 'is_not_empty'],
   },
 
+
+
   last_name: {
     column: 'cs.last_name',
+    type: 'text',
+    operators: ['equals', 'contains', 'starts_with', 'ends_with', 'isEmpty', 'is_not_empty'],
+  },
+
+  role:{
+        column: 'cs.role',
     type: 'text',
     operators: ['equals', 'contains', 'starts_with', 'ends_with', 'isEmpty', 'is_not_empty'],
   },
@@ -27,7 +35,7 @@ export const CUSTOMER_FILTER_SCHEMA = {
   },
 
   city:{
-       column: 'ct.city_name',
+       column: 'cs.city',
     type: 'text',
     operators: ['equals', 'contains', 'starts_with', 'ends_with', 'isEmpty', 'is_not_empty'],
 

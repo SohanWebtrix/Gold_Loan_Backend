@@ -1,11 +1,13 @@
-import { Injectable, InternalServerErrorException } from "@nestjs/common";
+/* eslint-disable prettier/prettier */
+
+
+import { Injectable, InternalServerErrorException, NotFoundException } from "@nestjs/common";
 import { ResultSetHeader } from "mysql2";
 import { DatabaseService } from "src/database/database.service";
 import { OPERATOR_SQL } from "src/filter/operator.map";
 import * as Sentry from '@sentry/node';
 
 
-/* eslint-disable prettier/prettier */
 @Injectable()
 export class TransactionRepository {
 
@@ -13,10 +15,387 @@ export class TransactionRepository {
 
     }
 
-        async getLatestAccountBalance(accountId: number, conn: any) {
 
-    const [rows]: any = await conn.query(
-        `
+    async getLatestInterestBalance(
+   loanId: number,
+   conn: any
+) {
+
+   const [rows]: any = await conn.query(
+      `
+      SELECT balance_after
+      FROM ledger_entries
+      WHERE loan_id = ?
+      AND type = 'interest'
+      ORDER BY entry_id DESC
+      LIMIT 1
+      `,
+      [loanId]
+   );
+
+   if (rows.length > 0) {
+      return Number(rows[0].balance_after);
+   }
+
+   return 0;
+}
+
+    async recalculatePrincipalPaymentInterest(
+  loanId: number,
+  paymentDate: string,
+  principalPaid: number,
+  interestRate: number,
+  conn?: any,
+) {
+
+  const db = conn ?? this.db;
+
+  const [rows] = await db.query(
+    `
+    SELECT
+      id,
+      daily_interest,
+      accrued_interest
+    FROM loan_daily_interest
+    WHERE loan_id = ?
+    AND interest_date > ?
+    ORDER BY interest_date ASC
+    `,
+    [loanId, paymentDate]
+  );
+
+  // get accrued interest ON payment date
+  const [previousRow] = await db.query(
+    `
+    SELECT accrued_interest
+    FROM loan_daily_interest
+    WHERE loan_id = ?
+    AND interest_date = ?
+    LIMIT 1
+    `,
+    [loanId, paymentDate]
+  );
+
+  console.log("previous rows are",previousRow);
+  console.log("rows are for",rows);
+  
+  let runningAccrued =
+    Number(previousRow?.[0]?.accrued_interest || 0);
+
+  for (const row of rows) {
+
+    // interest reduction because principal reduced
+    const reducedDailyInterest =
+      (Number(principalPaid) * Number(interestRate))
+      / 100 / 365;
+
+    // new corrected daily interest
+    const correctedDailyInterest =
+      Math.max(
+        Number(row.daily_interest) - reducedDailyInterest,
+        0
+      );
+
+    runningAccrued += correctedDailyInterest;
+
+    await db.query(
+      `
+      UPDATE loan_daily_interest
+      SET
+        daily_interest = ?,
+        accrued_interest = ?
+      WHERE id = ?
+      `,
+      [
+        correctedDailyInterest,
+        runningAccrued,
+        row.id
+      ]
+    );
+  }
+}
+
+
+        async searchTransactions(
+  search: string,
+  page: number,
+  limit: number,
+  companyId: number,
+) {
+
+  const safeLimit = Math.max(1, Number(limit));
+  const safeOffset = Math.max(0, (page - 1) * limit);
+
+  const searchValue = `%${search}%`;
+
+  const sql = `
+    SELECT
+      ts.*,
+
+      CONCAT(
+        c.first_name,
+        ' ',
+        c.last_name
+      ) as client_name
+
+    FROM loan_transactions ts
+
+    LEFT JOIN clients c
+      ON ts.client_id = c.cl_id
+
+    LEFT JOIN loans lo
+      ON ts.loan_id  = lo.loan_id
+
+    WHERE ts.company_id = ?
+
+    AND (
+      ts.receipt_no LIKE ?
+
+      OR lo.loan_document_number LIKE?
+
+      OR c.mobile_no LIKE ?
+
+      OR c.first_name LIKE ?
+
+      OR c.last_name LIKE ?
+
+      OR CONCAT(c.first_name, ' ', c.last_name) LIKE ?
+    )
+
+    ORDER BY ts.transaction_id DESC
+
+    LIMIT ? OFFSET ?
+  `;
+
+  const values = [
+    companyId,
+
+    searchValue,
+    searchValue,
+    searchValue,
+    searchValue,
+    searchValue,
+
+    safeLimit,
+    safeOffset,
+  ];
+
+  const rows = await this.db.query(sql, values);
+
+  // COUNT QUERY
+
+  const countSql = `
+    SELECT COUNT(*) as total
+
+    FROM loans lo
+
+    LEFT JOIN clients c
+      ON lo.client_id = c.cl_id
+
+    WHERE lo.compl_id = ?
+
+    AND (
+      lo.loan_document_number LIKE ?
+
+      OR c.mobile_no LIKE ?
+
+      OR c.first_name LIKE ?
+
+      OR c.last_name LIKE ?
+
+      OR CONCAT(c.first_name, ' ', c.last_name) LIKE ?
+    )
+  `;
+
+  const countResult = await this.db.query(
+    countSql,
+    [
+      companyId,
+
+      searchValue,
+      searchValue,
+      searchValue,
+      searchValue,
+      searchValue,
+    ]
+  );
+
+  const totalRecords = countResult[0]?.total || 0;
+      const start = totalRecords === 0 ? 0 : (page - 1) * limit + 1;
+      const end = Math.min(page * limit, totalRecords);
+
+  return {
+    currentPage: page,
+    limit,
+    start,
+    end,
+    totalRecords,
+    totalPages: Math.ceil(totalRecords / limit),
+    data: rows,
+  };
+}
+
+    async getLatestDailyInterest(
+  loanId: number,
+  conn?: any,
+) {
+try{
+  const db = conn ?? this.db;
+
+  const [rows] = await db.query(
+    `
+    SELECT accrued_interest
+    FROM loan_daily_interest
+    WHERE loan_id = ?
+    ORDER BY interest_date DESC
+    LIMIT 1
+    `,
+    [loanId]
+  );
+
+  console.log("row data for getLatestDailyInterest is",rows);
+  return Number(
+    rows?.[0]?.accrued_interest || 0
+  );
+}
+catch(error)
+{
+                Sentry.captureException(error);
+    console.error("error is",error);
+}
+}
+
+
+
+    async getInterestAsOfDate(
+  loanId: number,
+  transactionDate: string,
+  conn?: any,
+) {
+try{
+  const db = conn ?? this.db;
+
+  const rows = await db.query(
+    `
+    SELECT accrued_interest
+    FROM loan_daily_interest
+    WHERE loan_id = ?
+    AND interest_date = ?
+    LIMIT 1
+    `,
+    [
+      loanId,
+      transactionDate,
+    ]
+  );
+
+  return rows[0];
+}
+catch(error){
+                Sentry.captureException(error);
+    
+}
+}
+
+    async adjustFutureDailyInterest(
+  loanId: number,
+  transactionDate: string,
+  interestPaid: number,
+  conn?: any,
+) {
+try{
+  const db = conn ?? this.db;
+
+  return db.query(
+    `
+    UPDATE loan_daily_interest
+    SET accrued_interest =
+      GREATEST(accrued_interest - ?, 0)
+
+    WHERE loan_id = ?
+AND interest_date BETWEEN ? AND CURDATE()    `,
+    [
+      interestPaid,
+      loanId,
+      transactionDate,
+    ]
+  );
+}
+catch(error)
+{
+    Sentry.captureException(error);
+    
+}
+}
+
+
+    async updateTodayDailyInterest(
+  loanId: number,
+  accruedInterest: number,
+  conn?: any,
+) {
+
+    try{
+  const db = conn ?? this.db;
+
+  return db.query(
+    `
+    UPDATE loan_daily_interest
+    SET accrued_interest = ?
+    WHERE loan_id = ?
+    AND interest_date = CURDATE()
+    `,
+    [
+      accruedInterest,
+      loanId,
+    ]
+  );
+}
+catch(error){
+                Sentry.captureException(error);
+    
+}
+}
+
+    async updateLoanRunningBalance(
+  loanId: number,
+  data: any,
+  conn?: any,
+) {
+
+    try{
+  const db = conn ?? this.db;
+
+  return db.query(
+    `
+    UPDATE loans
+    SET
+      principal_balance = ?,
+      accrued_interest = ?,
+      total_amount = ?
+    WHERE loan_id = ?
+    `,
+    [
+      data.principal_balance,
+      data.accrued_interest,
+      data.total_amount,
+      loanId,
+    ]
+  );
+}
+catch(error)
+{
+    Sentry.captureException(error);
+    
+}
+
+}
+
+    async getLatestAccountBalance(accountId: number, conn: any) {
+
+        try{
+        const [rows]: any = await conn.query(
+            `
         SELECT balance_after
         FROM ledger_entries
         WHERE account_id = ?
@@ -24,30 +403,38 @@ export class TransactionRepository {
         ORDER BY entry_id DESC
         LIMIT 1
         `,
-        [accountId]
-    );
+            [accountId]
+        );
 
-    if (rows.length > 0) {
-        return Number(rows[0].balance_after);
-    }
+        if (rows.length > 0) {
+            return Number(rows[0].balance_after);
+        }
 
-    const [account]: any = await conn.query(
-        `
+        const [account]: any = await conn.query(
+            `
         SELECT opening_balance
         FROM bank_account
         WHERE id = ?
         `,
-        [accountId]
-    );
+            [accountId]
+        );
 
-    return Number(account[0].opening_balance);
-}
+        return Number(account[0].opening_balance);
+    }
+    catch(error)
+    {
+                    Sentry.captureException(error);
+        
+    }
+
+    }
 
 
-async getLatestLoanBalance(loanId: any, conn: any) {
+    async getLatestLoanBalance(loanId: any, conn: any) {
 
-    const [rows]: any = await conn.query(
-        `
+        try{
+        const [rows]: any = await conn.query(
+            `
         SELECT balance_after
         FROM ledger_entries
         WHERE loan_id = ?
@@ -55,15 +442,21 @@ async getLatestLoanBalance(loanId: any, conn: any) {
         ORDER BY entry_id DESC
         LIMIT 1
         `,
-        [loanId]
-    );
+            [loanId]
+        );
 
-    if (rows.length > 0) {
-        return Number(rows[0].balance_after);
+        if (rows.length > 0) {
+            return Number(rows[0].balance_after);
+        }
+
+        return 0;
     }
-
-    return 0;
-}
+    catch(error)
+    {
+                    Sentry.captureException(error);
+        
+    }
+    }
 
 
     async insertLedger(
@@ -173,7 +566,7 @@ LIMIT 1
             );
 
             if (rows.length === 0) {
-                throw new Error("Sequence configuration not found");
+                throw new NotFoundException("Prefix not set for transaction");
             }
 
             const row = rows[0];
@@ -438,7 +831,7 @@ LIMIT 1
 
             const loanRows = await this.db.query(
                 `
-             SELECT client_id,principal_amount,interest_amount,total_amount, overdue_amount,loan_status,due_date,duration_unit,interest_rate,total_topup_amount from loans WHERE loan_id = ? LIMIT 1
+             SELECT client_id,principal_amount,principal_balance,accrued_interest,interest_amount,total_amount, overdue_amount,loan_status,due_date,duration_unit,interest_rate,total_topup_amount from loans WHERE loan_id = ? LIMIT 1
               `,
                 [loanId]
             );
@@ -559,6 +952,8 @@ LIMIT 1
     }
 
     async getLastTransaction(loanId: number) {
+
+        try{
         const rows = await this.db.query(
             `
       SELECT *
@@ -571,6 +966,12 @@ LIMIT 1
         );
 
         return rows.length ? rows[0] : null;
+    }
+    catch(error)
+    {
+                    Sentry.captureException(error);
+        
+    }
     }
 
 
@@ -681,7 +1082,7 @@ LIMIT 1
         }
     }
 
-    async getClientLoans(clientId: number, companyId: number) {
+    async getClientLoans(clientId: number, companyId: number,transactionDate?:string) {
 
         try {
             const rows = await this.db.query(
@@ -690,13 +1091,20 @@ SELECT
     l.loan_id,
     l.loan_start_date,
     l.interest_rate,
+    l.due_date as loan_end_date,
+    COALESCE(lt.principal_balance,l.principal_amount,l.principal_amount) AS principal_amount,
+     -- INTEREST AS OF SELECTED DATE
+    COALESCE(
+        di.accrued_interest,
+        l.accrued_interest,
+        0
+    ) AS interest_amount,
 
-    COALESCE(lt.principal_balance, l.principal_amount) AS principal_amount,
-        lt.transaction_date AS last_transaction_date,
 
     l.loan_status,
     l.loan_document_number,
-
+lt.transaction_date AS last_transaction_date,
+lt.topup_date as topup_date,
     m.gold_item_id,
     m.category,
     m.morgaged_note
@@ -718,6 +1126,29 @@ LEFT JOIN (
 ) lt
 ON l.loan_id = lt.loan_id
 
+LEFT JOIN (
+    SELECT d1.loan_id,
+           d1.accrued_interest
+
+    FROM loan_daily_interest d1
+
+    INNER JOIN (
+        SELECT
+            loan_id,
+            MAX(interest_date) AS max_date
+
+        FROM loan_daily_interest
+
+        WHERE interest_date <= ?
+
+        GROUP BY loan_id
+    ) d2
+      ON d1.loan_id = d2.loan_id
+     AND d1.interest_date = d2.max_date
+) di
+ON l.loan_id = di.loan_id
+
+
 LEFT JOIN mortgaged_items m
 ON l.loan_id = m.loan_id
 
@@ -729,6 +1160,8 @@ ORDER BY l.loan_id DESC
                 [
                     companyId,
                     clientId,
+                    transactionDate || new Date(),
+
                     clientId,
                     companyId
                 ]
@@ -756,6 +1189,7 @@ SELECT
   l.principal_amount,
   l.interest_amount,
   l.loan_start_date,
+    l.accrued_interest,
   l.total_amount,
   l.interest_rate,
   l.loan_status,
@@ -904,6 +1338,7 @@ SELECT
   l.loan_status,
   l.loan_start_date,
   l.due_date,
+  l.accrued_interest,
   m.gold_item_id,
   m.category,
   m.morgaged_note,
@@ -921,6 +1356,7 @@ JOIN loans l ON t.loan_id = l.loan_id
 LEFT JOIN mortgaged_items m ON l.loan_id = m.loan_id
 LEFT JOIN company cm ON t.company_id = cm.company_id
 LEFT JOIN customers cust ON t.created_by = cust.customer_id
+
 WHERE t.transaction_id = ?
 AND t.company_id = ?
 `,
@@ -939,4 +1375,3 @@ AND t.company_id = ?
     }
 
 }
-

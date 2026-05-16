@@ -28,7 +28,6 @@ export class AuthController {
 
 ) {
     const customerIdNumber = Number(customerId);
-
     const userId = req.user.userId;
     return this.authService.UpdateCustomer(dto,customerIdNumber, userId);
   }

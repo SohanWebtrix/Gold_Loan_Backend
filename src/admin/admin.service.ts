@@ -14,6 +14,27 @@ export class AdminService {
         }
 
 
+          async getAdminById(aid: number) {
+
+    try {
+
+      if (!aid) {
+        throw new BadRequestException("client id is missing");
+      }
+
+      const data = await this.adminRepo.getAdminByid(aid);
+
+      return {
+        message: "admin fetched succesfully"
+        , data
+      }
+    }
+    catch (error) {
+      console.error("fail to fetch client", error)
+    }
+
+  }
+
       async CreateAdmin(dto: any,userid:number) {
     
             try {
@@ -31,9 +52,11 @@ export class AdminService {
                 throw new InternalServerErrorException("Failed to add admin");
             }
             catch (error) {
+
                 console.error("CreateAdmin error", error)
                 throw error;
-            }
+
+            } 
         }
 
         async updateAdmin(dto:any,adminid:number,userid:number)
@@ -126,4 +149,3 @@ let modified_date: string;
           }
         }
 }
-

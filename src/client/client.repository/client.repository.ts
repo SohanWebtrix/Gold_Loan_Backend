@@ -1,6 +1,6 @@
 /* eslint-disable prettier/prettier */
 
-import { ConflictException, Injectable } from "@nestjs/common";
+import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { DatabaseService } from "src/database/database.service";
 import { UpdateClientDto } from "../client.updatedto";
 import { ResultSetHeader } from "mysql2";
@@ -841,7 +841,7 @@ export class ClientRepository {
             );
 
             if (rows.length === 0) {
-                throw new Error("Sequence configuration not found");
+                throw new NotFoundException("Prefix Not Found for Customer");
             }
 
             const row = rows[0];

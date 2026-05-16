@@ -2,6 +2,8 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { LedureRepository } from './ledure.repository/ledure.repository';
 import { LEDURE_FILTER_SCHEMA } from './ledure.schema';
+import * as Sentry from '@sentry/node';
+
 
 @Injectable()
 export class LedureService {
@@ -76,6 +78,8 @@ export class LedureService {
     }
     catch (error) {
 
+                  Sentry.captureException(error);
+      
       console.error("get ledure list error", error)
       throw new InternalServerErrorException("Failed to fetch ledure list");
 

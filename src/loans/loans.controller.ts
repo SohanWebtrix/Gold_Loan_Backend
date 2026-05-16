@@ -48,6 +48,7 @@ export class LoansController {
     }
 
 
+
     @Get('get_all_loans')
     @UseGuards(AuthGuard('jwt'))
 
@@ -151,7 +152,7 @@ export class LoansController {
         return this.loanServ.getLoanRecpt(loanId);
     }
 
-    @Get('client_summary/:clientId')
+    @Post('client_summary/:clientId')
     @UseGuards(AuthGuard('jwt'))
     async getClientLoanSummary(
         @Param('clientId', ParseIntPipe) clientId: number,
@@ -160,10 +161,12 @@ export class LoansController {
         @Query('limit') limit = '10',
         @Body('filters') filters: any[] = [],
     ) {
+
         const companyIdNum = Number(companyId);
         const pageNum = Number(page);
         const limitNum = Number(limit);
         return this.loanServ.getClientLoanSummary(clientId, companyIdNum, pageNum, limitNum, filters);
+        
     }
 
     @Post("search-loan")

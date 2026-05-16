@@ -11,7 +11,7 @@ import * as Sentry from '@sentry/node';
 import { LOAN_FILTER_SCHEMA } from './loan.filter.schema';
 import { randomBytes } from "crypto";
 import { DateTime } from 'luxon';
-
+import { filter } from 'rxjs';
 
 
 @Injectable()
@@ -23,25 +23,25 @@ export class LoansService {
     private readonly ledureRepo: LedureRepository,
   ) { }
 
-  
-async searchLoansmobile(
-  search: string,
-  page: number,
-  limit: number,
-  companyId: number,
-) {
 
-  if (!search?.trim()) {
-    throw new BadRequestException('Search is required');
+  async searchLoansmobile(
+    search: string,
+    page: number,
+    limit: number,
+    companyId: number,
+  ) {
+
+    if (!search?.trim()) {
+      throw new BadRequestException('Search is required');
+    }
+
+    return this.loanRepo.searchLoansmob(
+      search.trim(),
+      page,
+      limit,
+      companyId,
+    );
   }
-
-  return this.loanRepo.searchLoansmob(
-    search.trim(),
-    page,
-    limit,
-    companyId,
-  );
-}
 
   async searchLoans(search: string, page: number,
     limit: number, userid: number) {
@@ -97,8 +97,8 @@ async searchLoansmobile(
       const loans = await this.transactionRepo.getClientLoanSummary(clientId, companyId);
 
       const validLoans = (loans || []).filter(
-  (loan: any) => loan.loan_id !== null
-);
+        (loan: any) => loan.loan_id !== null
+      );
 
       const loanRows = validLoans.map((loan: any) => {
         const totalAmount = Number(loan.total_amount ?? 0);
@@ -119,16 +119,19 @@ async searchLoansmobile(
           loan.current_interest_balance ?? (interestAmount - totalPaidInterest)
         );
 
+        const pendinginterestdaily = Number(loan.accrued_interest ?? 0);
+
         return {
           loan_id: loan.loan_id,
           loan_status: loan.loan_status,
           loan_document_number: loan.loan_document_number,
-          loan_start_date:loan.loan_start_date,
+          loan_start_date: loan.loan_start_date,
           tenure: loan.tenure,
           principal_amount: principalAmount,
           interest_amount: interestAmount,
+          daily_interest_amount: Math.round(loan.accrued_interest ?? 0),
           topup_amount: Number(loan.total_topup_amount ?? 0),
-           total_amount: totalAmount,
+          total_amount: totalAmount,
           interest_rate: interestRate,
           total_paid_amount: totalPaidAmount,
           total_paid_principal: totalPaidPrincipal,
@@ -145,6 +148,7 @@ async searchLoansmobile(
           acc.total_loan_amount += loan.total_amount;
           acc.total_principal += loan.principal_amount;
           acc.total_interest_amount += loan.interest_amount;
+          acc.total_daily_pending_interest += Number(loan.daily_interest_amount || 0);
           acc.total_interest_rate += loan.interest_rate;
           acc.total_paid_amount += loan.total_paid_amount;
           acc.total_paid_principal += loan.total_paid_principal;
@@ -165,19 +169,21 @@ async searchLoansmobile(
           total_pending_amount: 0,
           total_pending_principal: 0,
           total_pending_interest: 0,
+          total_daily_pending_interest: 0,
         },
       );
 
       const clientTotalTopupAmount =
-  loans.length > 0
-    ? Number(loans[0].client_total_topup_amount ?? 0)
-    : 0;
+        loans.length > 0
+          ? Number(loans[0].client_total_topup_amount ?? 0)
+          : 0;
 
       // Get total count for pagination
       const totalLedureRecords = await this.ledureRepo.getLedgerCountByClientId(clientId, companyId, filters);
       const totalPages = Math.ceil(totalLedureRecords / limit);
       const start = totalLedureRecords === 0 ? 0 : (page - 1) * limit + 1;
       const end = Math.min(page * limit, totalLedureRecords);
+
 
       const ledureRows = await this.ledureRepo.getLedgerByClientId(clientId, companyId, page, limit, filters);
 
@@ -204,13 +210,34 @@ async searchLoansmobile(
         client_id: clientId,
         client,
         loan_count: loanRows.length,
+        // totals: {
+        //   ...totals,
+        //   client_total_topup_amount: clientTotalTopupAmount,
+
+        //   average_interest_rate:
+        //     loanRows.length > 0
+        //       ? Number((totals.total_interest_rate / loanRows.length).toFixed(2))
+        //       : 0,
+        // },
+
         totals: {
-          ...totals,
-            client_total_topup_amount: clientTotalTopupAmount,
+          total_loan_amount: Math.round(totals.total_loan_amount),
+          total_principal: Math.round(totals.total_principal),
+          total_interest_amount: Math.round(totals.total_interest_amount),
+          total_interest_rate: Math.round(totals.total_interest_rate),
+          total_paid_amount: Math.round(totals.total_paid_amount),
+          total_paid_principal: Math.round(totals.total_paid_principal),
+          total_paid_interest: Math.round(totals.total_paid_interest),
+          total_pending_amount: Math.round(totals.total_pending_amount),
+          total_pending_principal: Math.round(totals.total_pending_principal),
+          total_pending_interest: Math.round(totals.total_pending_interest),
+          total_daily_pending_interest: Math.round(totals.total_daily_pending_interest),
+
+          client_total_topup_amount: Math.round(clientTotalTopupAmount),
 
           average_interest_rate:
             loanRows.length > 0
-              ? Number((totals.total_interest_rate / loanRows.length).toFixed(2))
+              ? Math.round(totals.total_interest_rate / loanRows.length)
               : 0,
         },
         loans: loanRows,
@@ -227,6 +254,8 @@ async searchLoansmobile(
         },
       };
     } catch (error) {
+            Sentry.captureException(error);
+
       console.error('getClientLoanSummary error', error);
       throw new InternalServerErrorException('Failed to fetch client loan summary');
     }
@@ -245,6 +274,8 @@ async searchLoansmobile(
         mortgaged_items: items,
       };
     } catch (error) {
+            Sentry.captureException(error);
+
       console.error('getMortgageItemsByLoanId error', error);
       throw new InternalServerErrorException('Failed to fetch mortgaged items');
     }
@@ -255,11 +286,13 @@ async searchLoansmobile(
       const items = await this.loanRepo.getLoanById(loanId);
       return {
         success: true,
-        message: items?.length ? 'loan fetched successfully' : 'loan not found',
+        message: 'loan fetched successfully',
         loan_id: loanId,
         loan: items,
       };
     } catch (error) {
+            Sentry.captureException(error);
+
       console.error('getMortgageItemsByLoanId error', error);
       throw new InternalServerErrorException('Failed to fetch mortgaged items');
     }
@@ -345,6 +378,76 @@ async searchLoansmobile(
   }
 
 
+  private async generateBackdatedInterest(
+    loanId: number | null,
+    principal: number,
+    annualRate: number,
+    startDate: string,
+    conn: any,
+  ) {
+
+    const start = DateTime
+      .fromISO(startDate)
+      .startOf('day');
+
+    const today = DateTime
+      .now()
+      .setZone('Asia/Kolkata')
+      .startOf('day');
+
+    // no backdated entries needed
+    if (start > today) {
+
+      return {
+        accruedInterest: 0
+      };
+    }
+
+    const dailyInterest = Number(
+      (
+        (principal * annualRate)
+        / 365
+        / 100
+      ).toFixed(2)
+    );
+
+    let runningAccrued = 0;
+
+    let current = start;
+
+    while (current <= today) {
+
+      runningAccrued = Number(
+        (
+          runningAccrued + dailyInterest
+        ).toFixed(2)
+      );
+
+      await this.loanRepo.insertDailyInterest(
+        {
+          loan_id: loanId,
+
+          interest_date:
+            current.toISODate(),
+
+          daily_interest:
+            dailyInterest,
+
+          accrued_interest:
+            runningAccrued,
+        },
+        conn
+      );
+
+      current = current.plus({ days: 1 });
+    }
+
+    return {
+      accruedInterest: runningAccrued
+    };
+  }
+
+
   async createLoan(dto: any, files: any, transactionRecpt: Express.Multer.File | undefined, userId: number, companyIdNum: number) {
 
     let uploadedPaths: string[] = [];
@@ -368,6 +471,22 @@ async searchLoansmobile(
       dto.loan_document_number = loan_no;
       dto.compl_id = companyIdNum;
       // STEP 1: Insert loan first
+
+      const principal = Number(dto.principal_amount);
+      const annualRate = Number(dto.interest_rate);
+
+      const dailyInterest = Number(
+        ((principal * annualRate) / (365 * 100)).toFixed(2)
+      );
+
+      dto.principal_balance =
+        Number(dto.principal_amount);
+
+      dto.accrued_interest = 0
+      // Number(dailyInterest);
+
+      dto.total_amount =
+        Number(dto.principal_amount);
 
       const loanRes = await this.loanRepo.insertLoan(dto, userId);
       console.log("loan id in loanRes is", loanRes)
@@ -441,6 +560,18 @@ async searchLoansmobile(
         })
       );
 
+    const today = DateTime.now()
+  .setZone('Asia/Kolkata')
+  .startOf('day');
+
+const dueDate = DateTime.fromISO(dto.due_date)
+  .setZone('Asia/Kolkata')
+  .startOf('day');
+
+if (dueDate < today) {
+  dto.loan_status = "overdue";
+}
+
       // STEP 4: Transaction only for child tables
       await this.db.transaction(async (conn) => {
 
@@ -470,11 +601,35 @@ async searchLoansmobile(
         }
 
 
+        const result =
+          await this.generateBackdatedInterest(
+            loanId,
+            Number(dto.principal_amount),
+            Number(dto.interest_rate),
+            dto.loan_start_date,
+            conn
+          );
 
-        if (
-          dto.Loan_status &&
-          dto.Loan_status === "active"
-        ) {
+        await this.loanRepo.updateLoanInterest(
+          loanId,
+          {
+            accrued_interest:
+              result.accruedInterest,
+
+            total_amount:
+              Number(dto.principal_amount)
+              + Number(result.accruedInterest),
+
+            last_interest_date: today
+          },
+          conn
+        );
+
+
+     if (
+  dto.loan_status === "active" ||
+  dto.loan_status === "overdue"
+) {
           // Generate Receipt Number
           // const receiptNo =
           //   await this.loanRepo.generateNumber(
@@ -521,60 +676,34 @@ async searchLoansmobile(
           // const transactionId = txRes.insertId;
           const istNow = DateTime.now().setZone('Asia/Kolkata').toFormat('yyyy-MM-dd HH:mm:ss');
 
-          const accountBalance =
-    await this.loanRepo.getLatestAccountBalance(
-        dto.account_type,
-        conn
-    );
+          const accountBalance:any =
+            await this.loanRepo.getLatestAccountBalance(
+              dto.account_type,
+              conn
+            );
 
-    const loanAmount = Number(dto.principal_amount);
+          const loanAmount = Number(dto.principal_amount);
 
-if (loanAmount > accountBalance) {
-  throw new BadRequestException(
-    `Insufficient balance. Available balance is ₹${accountBalance}`
-  );
-}
+          if (loanAmount > accountBalance) {
+            throw new BadRequestException(
+              `Insufficient balance. Available balance is ₹${accountBalance}`
+            );
+          }
 
-const accountBalanceAfter =
-    accountBalance - loanAmount;
+          const accountBalanceAfter =
+            accountBalance - loanAmount;
 
 
-    const loanBalance =
-    await this.loanRepo.getLatestLoanBalance(
-        loanId,
-        conn
-    );
+          const loanBalance:any =
+            await this.loanRepo.getLatestLoanBalance(
+              loanId,
+              conn
+            );
 
-const loanBalanceAfter =
-    loanBalance + loanAmount;
+          const loanBalanceAfter =
+            loanBalance + loanAmount;
 
-    
 
-          // -------------------------------------
-          // Ledger Entry 1
-          // DR Loan Receivable
-          // -------------------------------------
-          await this.loanRepo.insertLedger(
-            {
-              loan_id: loanId,
-              client_id: dto.client_id,
-              company_id: companyIdNum,
-              credit: dto.principal_amount,
-              balance_after: loanBalanceAfter,
-              debit: 0,
-              entry_type: "DISBURSEMENT",
-              remarks: "Loan given to customer",
-              status: "credit",
-              type: "loan",
-              entry_date: istNow
-            },
-            conn
-          );
-
-          // -------------------------------------
-          // Ledger Entry 2
-          // CR Selected Account
-          // -------------------------------------
           await this.loanRepo.insertLedger(
             {
               loan_id: loanId,
@@ -583,15 +712,40 @@ const loanBalanceAfter =
               account_id: dto.account_type,
               credit: 0,
               debit: dto.principal_amount,
-              entry_type: "DISBURSEMENT",
+              entry_type: "Disbursement Amount Paid",
               remarks: "Paid from selected account",
               balance_after: accountBalanceAfter,
               status: "debit",
               type: "account",
-              entry_date: istNow
+              entry_date: istNow,
+              transaction_date: dto.transaction_date,
             },
             conn
           );
+
+
+
+          await this.loanRepo.insertLedger(
+            {
+              loan_id: loanId,
+              client_id: dto.client_id,
+              company_id: companyIdNum,
+              credit: dto.principal_amount,
+              balance_after: loanBalanceAfter,
+              debit: 0,
+              entry_type: "Disbursement Amount Paid",
+              remarks: "Loan given to customer",
+              status: "credit",
+              type: "loan",
+              entry_date: istNow,
+              transaction_date: dto.transaction_date,
+
+            },
+            conn
+          );
+
+
+
         }
 
       });
@@ -603,6 +757,9 @@ const loanBalanceAfter =
       };
 
     } catch (error) {
+
+            Sentry.captureException(error);
+
 
       // Delete uploaded files
       for (const filePath of uploadedPaths) {
@@ -819,6 +976,8 @@ const loanBalanceAfter =
       };
 
     } catch (error) {
+
+            Sentry.captureException(error);
 
       // delete new uploaded files
       for (const p of newUploads) {
