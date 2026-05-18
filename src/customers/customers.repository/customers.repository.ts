@@ -13,15 +13,31 @@ import * as Sentry from '@sentry/node';
 export class CustomersRepository {
 
     constructor(private readonly db: DatabaseService) {
-        
+
     }
 
+    async deleteCustomer(customerid: number) {
+
+        try {
+
+            const result = await this.db.query(`update customers set status="inactive" where customer_id=?`, [customerid]);
+            return result;
+
+        }
+
+        catch (error) {
+
+            Sentry.captureException(error);
+            console.error("delete customer error is",error);
+            
+        }
+    }
 
     async getCountforCustomer(customerId: any) {
 
         try {
 
-        const rows: any = await this.db.query(`SELECT 
+            const rows: any = await this.db.query(`SELECT 
     c.customer_id,
     c.first_name,
     c.last_name,
@@ -58,12 +74,12 @@ WHERE c.customer_id = ?
 
 GROUP BY c.customer_id;`, [customerId])
 
-return rows[0];
+            return rows[0];
 
         }
 
         catch (error) {
-                              Sentry.captureException(error);
+            Sentry.captureException(error);
 
 
             console.error("error during getCountforCustomer is", error)
@@ -81,7 +97,7 @@ return rows[0];
             return rows;
         }
         catch (error) {
-                              Sentry.captureException(error);
+            Sentry.captureException(error);
 
             console.error("get customer by id error is", error);
             throw error;
@@ -98,7 +114,7 @@ return rows[0];
             return rows;
         }
         catch (error) {
-                              Sentry.captureException(error);
+            Sentry.captureException(error);
 
             console.error("get company by id erros is", error)
             throw error;
@@ -115,7 +131,7 @@ return rows[0];
             );
             return rows[0] || null;
         } catch (error) {
-                              Sentry.captureException(error);
+            Sentry.captureException(error);
 
             console.error('getStaffById error', error);
             throw error;
@@ -172,7 +188,7 @@ return rows[0];
 
             return result;
         } catch (error) {
-                              Sentry.captureException(error);
+            Sentry.captureException(error);
 
             console.error('insertStaff error', error);
             throw error;
@@ -226,7 +242,7 @@ return rows[0];
 
             return result;
         } catch (error) {
-                                          Sentry.captureException(error);
+            Sentry.captureException(error);
 
             console.error('updateStaff error', error);
             throw error;
@@ -262,7 +278,7 @@ return rows[0];
             return result;
 
         } catch (error) {
-                                          Sentry.captureException(error);
+            Sentry.captureException(error);
 
             console.error('updateStaff error', error);
             throw error;
@@ -279,7 +295,7 @@ return rows[0];
             );
             return result;
         } catch (error) {
-                                          Sentry.captureException(error);
+            Sentry.captureException(error);
 
             console.error('deleteStaff error', error);
             throw error;
@@ -373,7 +389,7 @@ return rows[0];
         }
         catch (error) {
 
-                                          Sentry.captureException(error);
+            Sentry.captureException(error);
 
             console.error("getFilteredCount is", error)
         }
@@ -469,7 +485,7 @@ return rows[0];
         }
         catch (error) {
 
-                                          Sentry.captureException(error);
+            Sentry.captureException(error);
 
             console.error("FindWithFilters error is", error)
         }
@@ -508,7 +524,7 @@ return rows[0];
         }
         catch (error) {
 
-                                          Sentry.captureException(error);
+            Sentry.captureException(error);
 
             console.error("findAll is", error)
             throw error
@@ -548,7 +564,7 @@ return rows[0];
         }
         catch (error) {
 
-                                          Sentry.captureException(error);
+            Sentry.captureException(error);
 
             console.error("findAll is", error)
             throw error
@@ -639,7 +655,7 @@ return rows[0];
         }
         catch (error) {
 
-                                          Sentry.captureException(error);
+            Sentry.captureException(error);
 
             console.error("getFilteredCount is", error)
         }
@@ -737,7 +753,7 @@ return rows[0];
         }
         catch (error) {
 
-                                          Sentry.captureException(error);
+            Sentry.captureException(error);
 
             console.error("FindWithFilters error is", error)
         }
@@ -758,7 +774,7 @@ return rows[0];
 
         catch (error) {
 
-                                          Sentry.captureException(error);
+            Sentry.captureException(error);
 
 
             console.error("getTotalCount error is", error)
@@ -781,7 +797,7 @@ return rows[0];
         }
 
         catch (error) {
-                                          Sentry.captureException(error);
+            Sentry.captureException(error);
 
 
             console.error("getTotalCount error is", error)

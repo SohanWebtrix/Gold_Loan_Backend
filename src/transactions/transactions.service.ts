@@ -148,6 +148,7 @@ export class TransactionsService {
       // =====================================
       // STEP 2 FETCH LAST TRANSACTION
       // =====================================
+      
       const lastTxn =
         await this.transactionrepo.getLastTransaction(dto.loan_id);
 
@@ -174,7 +175,6 @@ export class TransactionsService {
         Number(
           dailyInterestRow?.accrued_interest || 0
         );
-
 
       let interestBalance = lastTxn
         ? Number(lastTxn.interest_balance)
@@ -325,10 +325,6 @@ export class TransactionsService {
           );
       }
 
-      console.log("topup amount is", topupAmount)
-      console.log("principal balance is", principalBalance)
-      console.log("interest balance is", interestBalance)
-      console.log("topup interest is", topupInterest)
 
 
       if (dto.transaction_type !== 'TOPUP') {
@@ -502,6 +498,8 @@ export class TransactionsService {
             const accountBalanceAfter =
               latestAccountBalance - Number(topupAmount);
 
+              //  await this.transactionrepo.updateBankBalance(dto.account_type,accountBalanceAfter,conn)
+
             // CR Account (cash/bank decrease)
             await this.transactionrepo.insertLedger(
               {
@@ -670,6 +668,9 @@ export class TransactionsService {
               },
               conn
             );
+
+            // await this.transactionrepo.updateBankBalance(dto.account_type,runningAccountBalance,conn)
+
           }
 
           else if (dto.transaction_type === 'Interest Amount Paid') {
@@ -736,6 +737,9 @@ export class TransactionsService {
               },
               conn
             );
+
+            // await this.transactionrepo.updateBankBalance(dto.account_type,accountBalanceAfter,conn)
+
           }
 
           else {
@@ -791,6 +795,8 @@ export class TransactionsService {
               },
               conn
             );
+
+            // await this.transactionrepo.updateBankBalance(dto.account_type,accountBalanceAfter,conn)
           }
 
 

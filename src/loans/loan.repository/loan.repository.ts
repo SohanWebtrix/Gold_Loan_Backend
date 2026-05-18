@@ -16,6 +16,37 @@ export class LoanRepository {
 
     }
 
+    async updateBankBalance(accountid:number,account_balance:number,conn)
+
+    {
+
+try {
+    
+       const db = conn ?? this.db;
+
+  return db.query(
+    `
+    UPDATE bank_account
+    SET
+    bank_balance = ?
+    WHERE id = ?
+    `,
+    
+    [
+account_balance,
+accountid
+    ]
+  );
+
+} 
+
+catch (error) {
+    Sentry.captureException(error);
+}
+
+
+    }
+
     async searchLoansmob(
   search: string,
   page: number,
@@ -211,24 +242,24 @@ catch(error)
 
 async getActiveLoans() {
 
-    try{
-  return this.db.query(`
-    SELECT
-      loan_id,
-      principal_balance,
-            interest_rate,
+  try {
+    return this.db.query(`
+      SELECT
+        loan_id,
+        principal_balance,
+        interest_rate,
+        accrued_interest,
+        last_interest_date
+      FROM loans
+      WHERE loan_status IN ('active', 'overdue')
+    `);
+  } 
+  
+  catch (error) {
+    Sentry.captureException(error);
+  }
 
-      accrued_interest,
-      last_interest_date
-    FROM loans
-    WHERE loan_status = 'active'
-  `);
-    }
-    catch(error)
-    {
-                    Sentry.captureException(error);
-
-    }
+  
 }
 
 
@@ -1034,7 +1065,11 @@ SELECT
   c.city,
   cm.company_name,
   CONCAT_WS(' ', cust.first_name, cust.last_name) AS created_by_name,
-  YEAR(l.loan_start_date) AS financial_year,
+    CONCAT(
+  YEAR(l.loan_start_date),
+  '-',
+  LPAD(RIGHT(YEAR(l.loan_start_date) + 1, 2), 2, '0')
+) AS financial_year,
   l.loan_document_number AS loan_no
 FROM loans l
 JOIN clients c ON l.client_id = c.cl_id

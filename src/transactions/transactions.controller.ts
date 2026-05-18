@@ -55,6 +55,7 @@ export class TransactionsController {
             userId,
             companyIdNum,
         );
+        
     }
 
 
@@ -114,6 +115,7 @@ async getClientLoans(
         @Param("transactionId") transctionId: string,
         @Headers("comp-id") companyId: string
     ) {
+        
         return this.transactionService.getReceipt(
             Number(transctionId),
             Number(companyId)

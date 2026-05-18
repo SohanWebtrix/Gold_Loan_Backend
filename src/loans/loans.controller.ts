@@ -166,7 +166,7 @@ export class LoansController {
         const pageNum = Number(page);
         const limitNum = Number(limit);
         return this.loanServ.getClientLoanSummary(clientId, companyIdNum, pageNum, limitNum, filters);
-        
+   
     }
 
     @Post("search-loan")

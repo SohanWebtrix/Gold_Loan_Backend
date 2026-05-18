@@ -15,6 +15,37 @@ export class TransactionRepository {
 
     }
 
+        async updateBankBalance(accountid:number,account_balance:number,conn)
+    
+        {
+    
+    try {
+        
+           const db = conn ?? this.db;
+    
+      return await db.query(
+        `
+        UPDATE bank_account
+        SET
+        bank_balance = ?
+        WHERE id = ?
+        `,
+        
+        [
+    account_balance,
+    accountid
+        ]
+      );
+    
+    } 
+    
+    catch (error) {
+        Sentry.captureException(error);
+    }
+    
+    
+        }
+
 
     async getLatestInterestBalance(
    loanId: number,
@@ -304,6 +335,7 @@ catch(error){
   conn?: any,
 ) {
 try{
+    
   const db = conn ?? this.db;
 
   return db.query(
@@ -1182,6 +1214,7 @@ ORDER BY l.loan_id DESC
         try {
 
             const rows = await this.db.query(
+                
                 `
 SELECT
   l.loan_id,
@@ -1288,6 +1321,7 @@ cust.first_name,
 cust.last_name
 ORDER BY l.loan_id DESC
                 `,
+
                 [companyId, companyId, companyId, clientId, companyId, clientId, clientId]
             );
 
@@ -1297,11 +1331,17 @@ ORDER BY l.loan_id DESC
             //   + Second LEFT JOIN     → Grab balance from that most recent transaction
 
             return rows;
-        } catch (error) {
+        } 
+        
+        catch (error) 
+        
+        {
+            
             Sentry.captureException(error);
 
             console.error('getClientLoanSummary error', error);
             throw error;
+
         }
 
     }

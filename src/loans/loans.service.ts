@@ -130,7 +130,6 @@ export class LoansService {
         (interestAmount - totalPaidInterest)
       );
 
-
         const pendinginterestdaily = Number(loan.accrued_interest ?? 0);
 
         return {
@@ -465,7 +464,8 @@ export class LoansService {
     let uploadedPaths: string[] = [];
     let loanId: number | null = null;
 
-    try {
+    try 
+    {
 
       const clientData = await this.loanRepo.getClientstatus(dto.client_id);
 

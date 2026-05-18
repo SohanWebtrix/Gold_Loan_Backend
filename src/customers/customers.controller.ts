@@ -24,6 +24,7 @@ export class CustomersController {
         ]),
     )
     
+
     async createStaff(
         @Body() dto: any,
         @Headers('comp-id') companyId: string,
@@ -39,6 +40,7 @@ export class CustomersController {
 
         return await this.customerService.createStaff(dto, profileFile, companyIdNum, userId);
     }
+
 
     @Put('update_staff/:staff_id')
     @UseGuards(AuthGuard('jwt'))
@@ -71,6 +73,13 @@ export class CustomersController {
             return this.customerService.getCustById(id)
             }
 
+                @Put('delete_customer/:id')
+    async deleteCustomer(@Param('id', ParseIntPipe) id: number,) {
+
+        return this.customerService.deleteCustomer(id)
+
+    }
+
             
     @Post('list')
     @UseGuards(AuthGuard('jwt'))
@@ -98,7 +107,6 @@ export class CustomersController {
         return this.customerService.getCountbyid(id)
         
     }
-
 
 
     @Post('list_cust')

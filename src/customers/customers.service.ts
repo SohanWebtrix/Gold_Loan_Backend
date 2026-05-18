@@ -21,28 +21,52 @@ export class CustomersService {
 
   }
 
+  async deleteCustomer(Cid: number) {
+    try {
 
-  async getCountbyid(customerid:number)
-  {
-    try{
-      
-    const data= await this.customerRepo.getCountforCustomer(customerid);
-    console.log("data is",data);
+      if (!Cid) {
+        throw new BadRequestException("Customer id is missing");
+      }
 
-    if(!data)
-    {
-      throw new Error ("failed to fetch count ")
+      const result = await this.customerRepo.deleteCustomer(Cid);
+
+      // If no rows were deleted
+      if (!result || result.affectedRows === 0) {
+
+        throw new BadRequestException("Customer not found or already deleted");
+
+      }
+
+      return { message: "Customer deleted successfully" };
     }
-    return {
-      message:"count fetched succesfully",
-      data,
+    catch (error) {
+      Sentry.captureException(error);
+
+      console.error("delete Customer error is", error);
+      throw new InternalServerErrorException("Failed to Delete Customer");
+
     }
   }
-  catch(error)
-  {
-        Sentry.captureException(error);
-    
-  }
+
+
+  async getCountbyid(customerid: number) {
+    try {
+
+      const data = await this.customerRepo.getCountforCustomer(customerid);
+      console.log("data is", data);
+
+      if (!data) {
+        throw new Error("failed to fetch count ")
+      }
+      return {
+        message: "count fetched succesfully",
+        data,
+      }
+    }
+    catch (error) {
+      Sentry.captureException(error);
+
+    }
   }
 
   async getClinetById(userId: number) {
@@ -61,8 +85,8 @@ export class CustomersService {
       }
     }
     catch (error) {
-                        Sentry.captureException(error);
-      
+      Sentry.captureException(error);
+
       console.error("get user by id error is", error)
     }
   }
@@ -84,8 +108,8 @@ export class CustomersService {
       }
     }
     catch (error) {
-                        Sentry.captureException(error);
-      
+      Sentry.captureException(error);
+
       console.error("get customer by id error is", error)
     }
   }
@@ -156,8 +180,8 @@ export class CustomersService {
     }
     catch (error) {
 
-                        Sentry.captureException(error);
-      
+      Sentry.captureException(error);
+
       console.error("getBeneficiarylist error", error)
       throw new InternalServerErrorException("Failed to fetch Client list");
 
@@ -232,8 +256,8 @@ export class CustomersService {
     }
     catch (error) {
 
-                        Sentry.captureException(error);
-      
+      Sentry.captureException(error);
+
       console.error("getBeneficiarylist error", error)
       throw new InternalServerErrorException("Failed to fetch Client list");
 
@@ -288,8 +312,8 @@ export class CustomersService {
         staff_id: staffId,
       };
     } catch (error) {
-                        Sentry.captureException(error);
-      
+      Sentry.captureException(error);
+
       console.error('createStaff error', error);
 
       if (folderPath && fs.existsSync(folderPath)) {
@@ -317,7 +341,7 @@ export class CustomersService {
         }
       }
 
-throw error;
+      throw error;
     }
   }
 
@@ -418,8 +442,8 @@ throw error;
       };
     } catch (error) {
 
-                        Sentry.captureException(error);
-      
+      Sentry.captureException(error);
+
       console.error('updateStaff error', error);
 
       await Promise.all(
