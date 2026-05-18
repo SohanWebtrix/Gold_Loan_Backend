@@ -10,7 +10,7 @@ export class LoanCronService {
   constructor(private readonly db: DatabaseService, private readonly loanRepo: LoanRepository,
   ) { }
 
-  @Cron(CronExpression.EVERY_HOUR) async markOverdueLoans() {
+  @Cron(CronExpression.EVERY_MINUTE) async markOverdueLoans() {
     console.log('Cron running...');
 
     await this.db.query(`
