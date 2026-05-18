@@ -658,6 +658,7 @@ async getActiveLoans() {
                 item.gold_item,
                 item.total_weight,
                 item.morgaged_note,
+                item.stone_weight,
                 item.unit
             ]);
 
@@ -673,6 +674,7 @@ async getActiveLoans() {
         gold_item,
         total_weight,
         morgaged_note,
+        stone_weight,
         unit
       )
       VALUES ?

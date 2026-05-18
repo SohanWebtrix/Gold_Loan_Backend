@@ -1,0 +1,9 @@
+Date 18/05/2026
+
+1- 
+
+ALTER TABLE mortgaged_items 
+ADD COLUMN stone_weight DECIMAL(10,3);
+
+2-
+
