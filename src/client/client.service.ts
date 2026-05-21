@@ -81,7 +81,7 @@ export class ClientService {
   }
 
 
-  async getClinetById(userId: number) {
+  async getClinetById(userId: number,companyId:number) {
 
     try {
 
@@ -90,10 +90,16 @@ export class ClientService {
       }
 
       const data = await this.clientRepo.getUsersByid(userId);
+      const default_interest=await this.clientRepo.getCompanyinterst(companyId);
 
+      console.log("data is",data);
+      
       return {
-        message: "client fetched succesfully"
-        , data
+        message: "client fetched succesfully",
+         data:{
+          ...data,
+          default_interest
+        }
       }
     }
     catch (error) {

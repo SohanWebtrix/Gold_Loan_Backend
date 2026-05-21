@@ -11,7 +11,6 @@ export class LoanCronService {
   ) { }
 
   @Cron(CronExpression.EVERY_MINUTE) async markOverdueLoans() {
-    console.log('Cron running...');
 
     await this.db.query(`
       UPDATE loans
@@ -28,7 +27,6 @@ export class LoanCronService {
 
   async calculateDailyInterest() {
 
-    console.log('Daily interest cron started');
 
     const today =
       DateTime.now()
@@ -67,6 +65,7 @@ export class LoanCronService {
         // =====================================
         // INSERT DAILY SNAPSHOT
         // =====================================
+
 
         const newAccruedInterest =
           Number(

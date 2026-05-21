@@ -116,6 +116,7 @@ async getClientLoans(
         @Headers("comp-id") companyId: string
     ) {
         
+        
         return this.transactionService.getReceipt(
             Number(transctionId),
             Number(companyId)
@@ -143,6 +144,5 @@ async searchTransactionMobile(
   );
 
 }
-
 
 }

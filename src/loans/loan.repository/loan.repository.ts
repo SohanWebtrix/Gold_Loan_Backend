@@ -16,50 +16,89 @@ export class LoanRepository {
 
     }
 
-    async updateBankBalance(accountid:number,account_balance:number,conn)
 
-    {
+    async insertLoanDisbursementsBulk(
+  loanId: number,
+  companyid:number,
+  payments: any[],
+  conn: any
+) {
 
-try {
-    
-       const db = conn ?? this.db;
+  const values = payments.map(
+    item => [
+      loanId,
+      companyid,
+      item.account_type,
+      item.payment_type,
+      item.amount,
+      item.transaction_ref_no || null,
+      item.transaction_date || null,
+      item.note || null,
+      item.payment_proof_file || null
+    ]
+  );
 
-  return db.query(
+  await conn.query(
     `
+    INSERT INTO loan_disbursements (
+      loan_id,
+      account_id,
+      payment_type,
+      amount,
+      transaction_reference_no,
+      transaction_date,
+      note,
+      payment_proof_file
+    )
+    VALUES ?
+    `,
+    [values]
+  );
+}
+
+
+    async updateBankBalance(accountid: number, account_balance: number, conn) {
+
+        try {
+
+            const db = conn ?? this.db;
+
+            return db.query(
+                `
     UPDATE bank_account
     SET
     bank_balance = ?
     WHERE id = ?
     `,
-    
-    [
-account_balance,
-accountid
-    ]
-  );
 
-} 
+                [
+                    account_balance,
+                    accountid
+                ]
+            );
 
-catch (error) {
-    Sentry.captureException(error);
-}
+        }
+
+        catch (error) {
+            Sentry.captureException(error);
+        }
 
 
     }
 
     async searchLoansmob(
-  search: string,
-  page: number,
-  limit: number,
-  companyId: number,
-) {
-try{
-  const safeLimit = Math.max(1, Number(limit));
-  const safeOffset = Math.max(0, (page - 1) * limit);
+        search: string,
+        page: number,
+        limit: number,
+        companyId: number,
+    ) {
+        try {
+            const safeLimit = Math.max(1, Number(limit));
+            const safeOffset = Math.max(0, (page - 1) * limit);
 
-  const searchValue = `%${search}%`;
+            const searchValue = `%${search}%`;
 
-  const sql = `
+            const sql = `
     SELECT
       lo.*,
 
@@ -95,24 +134,24 @@ try{
     LIMIT ? OFFSET ?
   `;
 
-  const values = [
-    companyId,
+            const values = [
+                companyId,
 
-    searchValue,
-    searchValue,
-    searchValue,
-    searchValue,
-    searchValue,
+                searchValue,
+                searchValue,
+                searchValue,
+                searchValue,
+                searchValue,
 
-    safeLimit,
-    safeOffset,
-  ];
+                safeLimit,
+                safeOffset,
+            ];
 
-  const rows = await this.db.query(sql, values);
+            const rows = await this.db.query(sql, values);
 
-  // COUNT QUERY
+            // COUNT QUERY
 
-  const countSql = `
+            const countSql = `
     SELECT COUNT(*) as total
 
     FROM loans lo
@@ -135,49 +174,48 @@ try{
     )
   `;
 
-  const countResult = await this.db.query(
-    countSql,
-    [
-      companyId,
+            const countResult = await this.db.query(
+                countSql,
+                [
+                    companyId,
 
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-    ]
-  );
+                    searchValue,
+                    searchValue,
+                    searchValue,
+                    searchValue,
+                    searchValue,
+                ]
+            );
 
-  const totalRecords = countResult[0]?.total || 0;
-      const start = totalRecords === 0 ? 0 : (page - 1) * limit + 1;
-      const end = Math.min(page * limit, totalRecords);
+            const totalRecords = countResult[0]?.total || 0;
+            const start = totalRecords === 0 ? 0 : (page - 1) * limit + 1;
+            const end = Math.min(page * limit, totalRecords);
 
-  return {
-    currentPage: page,
-    limit,
-    start,
-    end,
-    totalRecords,
-    totalPages: Math.ceil(totalRecords / limit),
-    data: rows,
-  };
+            return {
+                currentPage: page,
+                limit,
+                start,
+                end,
+                totalRecords,
+                totalPages: Math.ceil(totalRecords / limit),
+                data: rows,
+            };
 
-}
+        }
 
-  catch(error)
-  {
-                Sentry.captureException(error);
+        catch (error) {
+            Sentry.captureException(error);
 
-  }
-}
+        }
+    }
 
 
-async insertDailyInterest(data: any,conn:any) {
+    async insertDailyInterest(data: any, conn: any) {
 
-    const db = conn ?? this.db;
-try{
-  return db.query(
-    `
+        const db = conn ?? this.db;
+        try {
+            return db.query(
+                `
     INSERT IGNORE INTO loan_daily_interest
     (
       loan_id,
@@ -187,63 +225,63 @@ try{
     )
     VALUES (?, ?, ?, ?)
     `,
-    [
-      data.loan_id,
-      data.interest_date,
-      data.daily_interest,
-      data.accrued_interest,
-    ]
-  );
-}
-catch(error)
-{
-                Sentry.captureException(error);
+                [
+                    data.loan_id,
+                    data.interest_date,
+                    data.daily_interest,
+                    data.accrued_interest,
+                ]
+            );
+        }
+        catch (error) {
+            Sentry.captureException(error);
 
-}
-}
+        }
+    }
 
-async updateLoanInterest(
-  loanId: number|null,
-  data: any,
-  conn:any,
-) {
+    async updateLoanInterest(
+        loanId: number | null,
+        data: any,
+        conn: any,
+    ) {
 
-   try{ 
-    const db = conn ?? this.db;
+        try {
+            const db = conn ?? this.db;
 
-  return db.query(
-    `
+            return db.query(
+                `
     UPDATE loans
     SET
 
       accrued_interest = ?,
       total_amount=?,
-        last_interest_date = ?
+        last_interest_date = ?,
+        loan_document_number=?
     WHERE loan_id = ?
     `,
-    [
-      data.accrued_interest,
-      data.total_amount,
-      data.last_interest_date,
-      loanId,
-    ]
-  );
+                [
+                    data.accrued_interest,
+                    data.total_amount,
+                    data.last_interest_date,
+                    data.loan_document_number,
+                    loanId,
+                ]
+            );
 
-}
+        }
 
-catch(error)
-{
-                Sentry.captureException(error);
+        catch (error) {
+            Sentry.captureException(error);
 
-}
+        }
 
-}
+    }
 
 
-async getActiveLoans() {
+    async getActiveLoans() {
 
-  try {
-    return this.db.query(`
+        try {
+            return this.db.query(`
       SELECT
         loan_id,
         principal_balance,
@@ -253,21 +291,21 @@ async getActiveLoans() {
       FROM loans
       WHERE loan_status IN ('active', 'overdue')
     `);
-  } 
-  
-  catch (error) {
-    Sentry.captureException(error);
-  }
+        }
 
-  
-}
+        catch (error) {
+            Sentry.captureException(error);
+        }
 
+
+    }
 
     async getLatestAccountBalance(accountId: number, conn: any) {
 
-        try{
-        const [rows]: any = await conn.query(
-            `
+        try {
+
+            const [rows]: any = await conn.query(
+                `
         SELECT balance_after
         FROM ledger_entries
         WHERE account_id = ?
@@ -275,29 +313,28 @@ async getActiveLoans() {
         ORDER BY entry_id DESC
         LIMIT 1
         `,
-            [accountId]
-        );
+                [accountId]
+            );
 
-        if (rows.length > 0) {
-            return Number(rows[0].balance_after);
-        }
+            if (rows.length > 0) {
+                return Number(rows[0].balance_after);
+            }
 
-        const [account]: any = await conn.query(
-            `
+            const [account]: any = await conn.query(
+                `
         SELECT opening_balance
         FROM bank_account
         WHERE id = ?
         `,
-            [accountId]
-        );
+                [accountId]
+            );
 
-        return Number(account[0].opening_balance);
-    }
-    catch(error)
-    {
-                    Sentry.captureException(error);
+            return Number(account[0].opening_balance);
+        }
+        catch (error) {
+            Sentry.captureException(error);
 
-    }
+        }
 
     }
 
@@ -305,9 +342,9 @@ async getActiveLoans() {
 
     async getLatestLoanBalance(loanId: any, conn: any) {
 
-        try{
-        const [rows]: any = await conn.query(
-            `
+        try {
+            const [rows]: any = await conn.query(
+                `
         SELECT balance_after
         FROM ledger_entries
         WHERE loan_id = ?
@@ -315,20 +352,19 @@ async getActiveLoans() {
         ORDER BY entry_id DESC
         LIMIT 1
         `,
-            [loanId]
-        );
+                [loanId]
+            );
 
-        if (rows.length > 0) {
-            return Number(rows[0].balance_after);
+            if (rows.length > 0) {
+                return Number(rows[0].balance_after);
+            }
+
+            return 0;
         }
+        catch (error) {
+            Sentry.captureException(error);
 
-        return 0;
-    }
-    catch(error)
-    {
-                    Sentry.captureException(error);
-
-    }
+        }
     }
 
 
@@ -455,6 +491,8 @@ async getActiveLoans() {
     ) {
         try {
 
+            console.log("data in insertLoan is", data);
+
             const payload: any = {
                 ...data,
                 created_by: userId
@@ -463,6 +501,8 @@ async getActiveLoans() {
 
             delete payload.nominees;
             delete payload.mortgaged_items;
+            delete payload.payments;
+
 
             Object.keys(payload).forEach(key => {
                 if (payload[key] === undefined) {
@@ -473,6 +513,12 @@ async getActiveLoans() {
             const columns = Object.keys(payload).join(", ");
             const placeholders = Object.keys(payload).map(() => "?").join(", ");
             const values = Object.values(payload);
+
+            console.log(payload.loan_document_number);
+            console.log(payload);
+            console.log("columns", columns);
+            console.log("values", values);
+
 
             const result = await this.db.query<ResultSetHeader>(
                 `INSERT INTO loans (${columns}) VALUES (${placeholders})`,
@@ -1066,6 +1112,10 @@ SELECT
   c.gender,
   c.city,
   cm.company_name,
+  cm.license_number,
+  cm.note,
+  cm.company_logo,
+  cm.address,
   CONCAT_WS(' ', cust.first_name, cust.last_name) AS created_by_name,
     CONCAT(
   YEAR(l.loan_start_date),
@@ -1160,13 +1210,24 @@ WHERE loan_id = ?
                 `
 SELECT
   m.*,
+  (
+  SELECT COALESCE(SUM(amount), 0)
+  FROM mortgaged_items
+  WHERE loan_id = m.loan_id
+) AS total_mortgaged_amount,
   CONCAT_WS(' ', c.first_name, c.last_name) AS borrower,
   c.caste,
   c.client_code,
   c.mobile_no,
   c.street_add1,
   c.city,
+  c.profile_pic_path,
   cm.company_name,
+  cm.license_number,
+  cm.note,
+  cm.company_logo,
+  cm.note,
+  cm.address,
   CONCAT_WS(' ', cust.first_name, cust.last_name) AS created_by_name,
   CONCAT(
   YEAR(l.loan_start_date),
@@ -1176,27 +1237,34 @@ SELECT
   l.loan_document_number  as loan_no,
   l.interest_rate,
   l.principal_amount,
-  l.due_date
+  l.due_date,
+  l.loan_start_date,
+  l.transaction_date,
+  l.interest_rate
 FROM mortgaged_items m
 JOIN loans l ON m.loan_id = l.loan_id
 JOIN clients c ON l.client_id = c.cl_id
 LEFT JOIN customers cust ON l.created_by = cust.customer_id
-LEFT JOIN company cm ON l.compl_id  = cm.company_id 
+LEFT JOIN company cm ON l.compl_id  = cm.company_id
 WHERE m.loan_id = ?
                 `,
                 [loanId]
             );
+
 
             return rows;
 
         }
 
         catch (error) {
+
             Sentry.captureException(error);
 
             console.error("get mortgaged by id erros is", error)
             throw error;
         }
+
+
     }
 
 
@@ -1632,7 +1700,7 @@ WHERE m.loan_id = ?
     c.pan_card_path as pan_card_path,
      CONCAT(c.first_name, ' ', c.last_name) as client_name
 FROM loans l
-LEFT JOIN clients c 
+LEFT JOIN clients c
     ON l.client_id = c.cl_id
 WHERE l.loan_id = ?
 LIMIT 1

@@ -21,6 +21,8 @@ export class CustomersService {
 
   }
 
+
+
   async deleteCustomer(Cid: number) {
     try {
 
@@ -420,6 +422,8 @@ export class CustomersService {
 
       const payload = { ...dto, ...fileUpdates };
       delete payload.remove_profile;
+
+payload.cust_email = payload.cust_email?.trim() || null;
 
       const result = await this.customerRepo.updateStaff(staffId, payload, userId);
 

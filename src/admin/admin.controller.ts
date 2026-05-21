@@ -8,6 +8,22 @@ export class AdminController {
 
   constructor(private readonly adminService: AdminService) { }
 
+
+    @Post("search_company")
+    @UseGuards(AuthGuard('jwt'))
+    async searchBank(@Query("search") search: string, @Query('page') page = '1',
+        @Query('limit') limit = '10', @Req() req: any, @Headers('comp-id') companyId: string,
+
+    ) {
+
+        const userid = req.user.userId;
+        const companyIdNum = Number(companyId);
+        return this.adminService.searchComapany(search, Number(page),
+            Number(limit), companyIdNum);
+    }
+
+
+
   @Post('create_admin')
   @UseGuards(AuthGuard('jwt'))
 
@@ -42,6 +58,7 @@ export class AdminController {
       Number(limit),
       filters,
     );
+    
   }
 
    @Get('get_admin/:id')
@@ -51,4 +68,21 @@ export class AdminController {
         return this.adminService.getAdminById(id)
     }
 
+         @Post('create_bank')
+        @UseGuards(AuthGuard('jwt'))
+  async CreateBank(@Body() dto:any,@Req() req: any) {
+
+    const userid = req.user.userId;
+
+    return this.adminService.CreateBank(dto,userid);
+
+  }
+
+
+     @Get('get_bank/:id')
+    async getBank(
+        @Param('id', ParseIntPipe) id: number) {
+
+        return this.adminService.getBankById(id)
+    }
 }

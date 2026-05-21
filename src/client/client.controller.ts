@@ -13,8 +13,11 @@ export class ClientController {
 
     @Get('get_client/:id')
     async getClient(
-        @Param('id', ParseIntPipe) id: number) {
-        return this.clientService.getClinetById(id)
+        @Param('id', ParseIntPipe) id: number, @Headers('comp-id') companyId: string,
+) {
+            const companyIdNum = Number(companyId);
+
+        return this.clientService.getClinetById(id,companyIdNum)
     }
 
     @Get('get_clients_loan/:id')

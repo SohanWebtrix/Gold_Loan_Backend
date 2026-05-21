@@ -201,12 +201,15 @@ export class AuthService {
 
         const rows = await this.authRepo.loginemail(login_id);
 
-
         if (!rows) {
             throw new UnauthorizedException('Invalid username or mobile number');
         }
 
         const user = rows;
+
+        const company_name= await this.authRepo.getCompanyname(user.comp_id);
+
+    console.log("company name is",company_name);
 
         // ✅ CHECK STATUS FIRST
         if (user.status !== 'active') {
@@ -238,7 +241,8 @@ export class AuthService {
                 comp_id: user.comp_id,
                 mobile_no: user.cust_phone,
                 role: user.role,
-                profile_path: user.profile_pic_path
+                profile_path: user.profile_pic_path,
+                company_name,
             },
         };
     }
@@ -289,49 +293,59 @@ export class AuthService {
 
 
 
-    async forgotPassword(email: string) {
+async forgotPassword(email: string) {
+  try {
+    const useremail = await this.authRepo.findemail(email);
 
-        try {
-
-            const useremail = await this.authRepo.findemail(email);
-
-            console.log("user email is", useremail)
-            if (!useremail) {
-                throw new UnauthorizedException('Email not found');
-            }
-
-            const otp = Math.floor(100000 + Math.random() * 900000).toString();
-            const hash = await bcrypt.hash(otp, 10);
-            const expiry = new Date(Date.now() + 30 * 60 * 1000);
-
-            console.log("expiry time is", expiry)
-            const rows = await this.authRepo.insertOtp(email, hash, expiry);
-
-            await this.mailService.sendOTP(email, otp);
-
-
-            if (rows && rows.affectedRows === 1) {
-                return {
-                    success: true,
-                    message: "otp sent successfully",
-                }
-            }
-
-            throw new InternalServerErrorException("Fail to send otp");
-        } catch (error) {
-
-
-            if (error instanceof HttpException) {
-                throw error;
-            }
-
-            throw new InternalServerErrorException(
-                'Failed to send OTP email. Please try again.',
-            );
-        }
+    if (!useremail) {
+      throw new UnauthorizedException('Email not found');
     }
 
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    const hash = await bcrypt.hash(otp, 10);
+
+    const expiry = new Date(Date.now() + 5 * 60 * 1000);
+
+    // DB transaction only
+    const rows = await this.db.transaction(async (conn) => {
+      return await this.authRepo.insertOtp(
+        conn,
+        email,
+        hash,
+        expiry,
+      );
+    });
+
+    console.log("rows are",rows);
+
+    if (!rows || rows.affectedRows !== 1) {
+      throw new InternalServerErrorException(
+        'Failed to save OTP',
+      );
+    }
+
+    // Send mail AFTER commit
+    await this.mailService.sendOTP(email, otp);
+
+    return {
+      success: true,
+      message: 'OTP sent successfully',
+    };
+
+  } catch (error) {
+    if (error instanceof HttpException) {
+      throw error;
+    }
+
+    throw new InternalServerErrorException(
+      'Failed to send OTP email. Please try again.',
+    );
+  }
+}
+
     async verifyEmailOtp(email: string, otp: string) {
+        
         // Compare OTP with hash
 
         try {
@@ -375,7 +389,6 @@ export class AuthService {
     }
 
 
-
     async resetPassword(email: string, newPassword: string) {
 
         try {
@@ -385,8 +398,6 @@ export class AuthService {
             if (!rows) {
                 throw new BadRequestException('Email does not exists');
             }
-
-
 
 
             // 3️⃣ Hash password

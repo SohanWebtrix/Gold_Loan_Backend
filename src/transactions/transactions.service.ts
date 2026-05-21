@@ -55,13 +55,16 @@ export class TransactionsService {
     page: number,
     limit: number,
     filters: any[] = [],
-    userid: number
+    companyIdNum: number
   ) {
     try {
 
       if (page < 1) page = 1;
       if (limit < 1) limit = 10;
 
+      if (!companyIdNum || companyIdNum <= 0) {
+        throw new Error("Company ID is required and must be a valid positive number");
+      }
       // 🔑 MAP FILTERS HERE
       const validatedFilters = filters.map((f) => {
         const schema = TRANSACTION_FILTER_SCHEMA[f.field];
@@ -87,15 +90,15 @@ export class TransactionsService {
 
       const totalRecords =
         validatedFilters.length > 0
-          ? await this.transactionrepo.getFilteredCount(validatedFilters, userid)
-          : await this.transactionrepo.getTotalCount(userid);
+          ? await this.transactionrepo.getFilteredCount(validatedFilters, companyIdNum)
+          : await this.transactionrepo.getTotalCount(companyIdNum);
 
       const totalPages = Math.ceil(totalRecords / limit);
 
       const data =
         validatedFilters.length > 0
-          ? await this.transactionrepo.findWithFilters(validatedFilters, page, limit, userid)
-          : await this.transactionrepo.findAll(page, limit, userid);
+          ? await this.transactionrepo.findWithFilters(validatedFilters, page, limit, companyIdNum)
+          : await this.transactionrepo.findAll(page, limit, companyIdNum);
 
       const start = totalRecords === 0 ? 0 : (page - 1) * limit + 1;
       const end = Math.min(page * limit, totalRecords);
@@ -116,8 +119,13 @@ export class TransactionsService {
 
       Sentry.captureException(error);
 
+      if (error.message === "Company ID is required and must be a valid positive number") {
+        console.error("Company ID validation failed:", error);
+        throw new BadRequestException(error.message); // Or appropriate HTTP exception
+      }
 
       console.error("getTransaction error", error)
+
       throw new InternalServerErrorException("Failed to fetch transaction list");
 
     }
@@ -135,6 +143,21 @@ export class TransactionsService {
     try {
       dto.company_id = companyId;
 
+      const nowIST = DateTime.now()
+        .setZone('Asia/Kolkata');
+
+      const transactionDateTime = DateTime
+        .fromISO(dto.transaction_date, {
+          zone: 'Asia/Kolkata'
+        })
+        .set({
+          hour: nowIST.hour,
+          minute: nowIST.minute,
+          second: nowIST.second,
+          millisecond: 0,
+        })
+        .toFormat('yyyy-MM-dd HH:mm:ss');
+
       // =====================================
       // STEP 1 FETCH LOAN
       // =====================================
@@ -148,7 +171,7 @@ export class TransactionsService {
       // =====================================
       // STEP 2 FETCH LAST TRANSACTION
       // =====================================
-      
+
       const lastTxn =
         await this.transactionrepo.getLastTransaction(dto.loan_id);
 
@@ -379,11 +402,11 @@ export class TransactionsService {
                 transaction_date:
                   dto.transaction_type === 'TOPUP'
                     ? null
-                    : dto.transaction_date,
+                    : transactionDateTime,
 
                 topup_date:
                   dto.transaction_type === 'TOPUP'
-                    ? dto.transaction_date
+                    ? transactionDateTime
                     : null,
 
                 created_by: userId,
@@ -498,7 +521,7 @@ export class TransactionsService {
             const accountBalanceAfter =
               latestAccountBalance - Number(topupAmount);
 
-              //  await this.transactionrepo.updateBankBalance(dto.account_type,accountBalanceAfter,conn)
+            //  await this.transactionrepo.updateBankBalance(dto.account_type,accountBalanceAfter,conn)
 
             // CR Account (cash/bank decrease)
             await this.transactionrepo.insertLedger(
@@ -515,7 +538,7 @@ export class TransactionsService {
                 status: "debit",
                 type: "account",
                 entry_date: istNow,
-                transaction_date: dto.transaction_date,
+                transaction_date: transactionDateTime,
 
               },
               conn
@@ -536,7 +559,7 @@ export class TransactionsService {
                 status: "credit",
                 type: "loan",
                 entry_date: istNow,
-                transaction_date: dto.transaction_date,
+                transaction_date: transactionDateTime,
 
               },
               conn
@@ -575,7 +598,7 @@ export class TransactionsService {
                 type: "loan",
 
                 entry_date: istNow,
-                transaction_date: dto.transaction_date,
+                transaction_date: transactionDateTime,
               },
               conn
             );
@@ -604,7 +627,7 @@ export class TransactionsService {
                 type: "account",
 
                 entry_date: istNow,
-                transaction_date: dto.transaction_date,
+                transaction_date: transactionDateTime,
               },
               conn
             );
@@ -635,7 +658,7 @@ export class TransactionsService {
                 type: "interest",
 
                 entry_date: istNow,
-                transaction_date: dto.transaction_date,
+                transaction_date: transactionDateTime,
               },
               conn
             );
@@ -664,7 +687,7 @@ export class TransactionsService {
                 type: "account",
 
                 entry_date: istNow,
-                transaction_date: dto.transaction_date,
+                transaction_date: transactionDateTime,
               },
               conn
             );
@@ -704,7 +727,7 @@ export class TransactionsService {
                 type: "interest",
 
                 entry_date: istNow,
-                transaction_date: dto.transaction_date,
+                transaction_date: transactionDateTime,
               },
               conn
             );
@@ -733,7 +756,7 @@ export class TransactionsService {
                 type: "account",
 
                 entry_date: istNow,
-                transaction_date: dto.transaction_date,
+                transaction_date: transactionDateTime,
               },
               conn
             );
@@ -763,7 +786,7 @@ export class TransactionsService {
                 status: "debit",
                 type: "loan",
                 entry_date: istNow,
-                transaction_date: dto.transaction_date,
+                transaction_date: transactionDateTime,
 
               },
               conn
@@ -789,7 +812,7 @@ export class TransactionsService {
                 status: "credit",
                 type: "account",
                 entry_date: istNow,
-                transaction_date: dto.transaction_date,
+                transaction_date: transactionDateTime,
 
 
               },
@@ -974,6 +997,33 @@ export class TransactionsService {
 
       const grouped = rows.reduce((acc, row) => {
 
+      const startDate = DateTime.fromJSDate(
+  new Date(row.loan_start_date),
+  { zone: 'Asia/Kolkata' }
+).startOf('day');
+
+const now = DateTime.now()
+  .setZone('Asia/Kolkata')
+  .startOf('day');
+
+const diff = now.diff(startDate, [
+  'years',
+  'months',
+  'days'
+]).toObject();
+
+const years = Math.floor(diff.years || 0);
+const months = Math.floor(diff.months || 0);
+const days = Math.floor(diff.days || 0) + 1;
+
+const duration = [
+  years ? `${years} year${years > 1 ? 's' : ''}` : '',
+  months ? `${months} month${months > 1 ? 's' : ''}` : '',
+  days ? `${days} day${days > 1 ? 's' : ''}` : ''
+]
+.filter(Boolean)
+.join(' ');
+
         let loan = acc.find(
           (item) => item.loan_id === row.loan_id
         );
@@ -993,6 +1043,9 @@ export class TransactionsService {
             total_amount:
               Number(row.principal_amount || 0)
               + Number(row.interest_amount || 0),
+
+                total_duration: duration,
+
 
             loan_status: row.loan_status,
 
@@ -1055,7 +1108,9 @@ export class TransactionsService {
   }
 
   async getReceipt(transactionId: number, companyId: number) {
+
     try {
+
       const rows = await this.transactionrepo.getTransactionReceipt(
         transactionId,
         companyId
@@ -1078,7 +1133,7 @@ export class TransactionsService {
             transaction_id: row.transaction_id,
             transaction_type: row.transaction_type,
             transaction_date: row.transaction_date,
-            paid_amount: row.paid_amount,
+            paid_amount: Math.round(row.paid_amount),
             payment_method: row.payment_method,
             company_name: row.company_name,
             client_name: row.client_name,
@@ -1086,10 +1141,14 @@ export class TransactionsService {
             loan_number: row.loan_document_number,
             principal_balanace: row.principal_balance,
             interest_balance: row.accrued_interest,
-            total_balance: row.total_balance,
+            total_balance: row.total_amount,
             loan_status: row.loan_status,
             loan_start_date: row.loan_start_date,
             loan_due_date: row.due_date,
+            company_liscense: row.license_number,
+            company_note: row.note,
+            company_logo: row.company_logo,
+            company_address: row.address,
             // mortgaged_items: []
           };
 
@@ -1107,6 +1166,8 @@ export class TransactionsService {
           }
 
           acc.push(receipt);
+
+
         }
 
         // if (row.gold_item_id) {

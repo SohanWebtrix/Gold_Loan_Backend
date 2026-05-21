@@ -27,9 +27,11 @@ export class AuthController {
   async UpdateUser(@Body() dto: any, @Req() req: JwtRequest,@Param('customer_id') customerId: string
 
 ) {
+
     const customerIdNumber = Number(customerId);
     const userId = req.user.userId;
     return this.authService.UpdateCustomer(dto,customerIdNumber, userId);
+
   }
 
   @Get('customer/:customer_id')
@@ -38,9 +40,11 @@ export class AuthController {
     @Param('customer_id') customerId: string,
     @Headers('comp-id') compIdHeader: string,
   ) {
+
     const customerIdNumber = Number(customerId);
     const compIdNumber = compIdHeader ? Number(compIdHeader) : undefined;
     return this.authService.getCustomerDetails(customerIdNumber, compIdNumber);
+
   }
 
    @Post('create_admin')
@@ -86,18 +90,22 @@ export class AuthController {
       AccessTokenss,
       RefreshToken: result.refreshToken,
     };
+    
   }
 
 
   @Post('forgot_password')
   forgotPassword(@Body('emailid') email: string) {
+
     return this.authService.forgotPassword(email);
+
   }
 
   @Post('verify_otp_email')
   async verifyOtpEmail(
     @Body() body: { email: string; otp: string },
   ) {
+
     const result = await this.authService.verifyEmailOtp(body.email, body.otp);
 
     return {
@@ -109,8 +117,9 @@ export class AuthController {
   async resetPassword(
     @Body() body: { email: string; password: string },
   ) {
-
+    
     return this.authService.resetPassword(body.email, body.password);
+
   }
 
 }

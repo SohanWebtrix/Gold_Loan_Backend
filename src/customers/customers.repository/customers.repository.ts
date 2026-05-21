@@ -1,5 +1,5 @@
 /* eslint-disable prettier/prettier */
-import { Injectable } from "@nestjs/common";
+import { Injectable, InternalServerErrorException } from "@nestjs/common";
 import { DatabaseService } from "src/database/database.service";
 import { OPERATOR_SQL } from "src/filter/operator.map";
 import { DateTime } from 'luxon';
@@ -16,6 +16,8 @@ export class CustomersRepository {
 
     }
 
+
+
     async deleteCustomer(customerid: number) {
 
         try {
@@ -29,7 +31,7 @@ export class CustomersRepository {
 
             Sentry.captureException(error);
             console.error("delete customer error is",error);
-            
+
         }
     }
 
@@ -165,7 +167,7 @@ GROUP BY c.customer_id;`, [customerId])
                 city: data.city,
                 pincode: data.pincode,
                 cust_phone: data.cust_phone,
-                cust_email: data.cust_email,
+                cust_email: data.cust_email?.trim() || null,
                 profile_pic_path: data.profile_pic_path,
                 cust_password,
                 created_by: userId,

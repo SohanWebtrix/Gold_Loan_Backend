@@ -91,6 +91,21 @@ export class AuthRepository {
     }
 
 
+    async getCompanyname(companyid:number)
+    {
+
+          const rows = await this.db.query(
+            `
+      SELECT
+      company_name from company where company_id=?
+      LIMIT 1
+      `,
+            [companyid],
+        );
+
+        return rows[0].company_name || null;
+    }
+
     // REPOSITORY
 
     async insertprefixbulk(
@@ -219,6 +234,7 @@ export class AuthRepository {
                 company_name: data.company_name,
                 company_email: data.company_email,
                 company_mobile: data.company_mobile,
+                default_interest:data.default_interest,
             };
 
             Object.entries(companyFields).forEach(([key, value]) => {
@@ -357,9 +373,12 @@ export class AuthRepository {
         const db = conn ?? this.db;
 
         try {
+
+
             const company_email = data.company_email || null;
             const company_mobile = data.company_mobile || null;
             const company_name = data.company_name || null;
+            const default_interest=data.default_interest||null
 
 
             const created_date = DateTime.now()
@@ -373,15 +392,17 @@ export class AuthRepository {
                 company_name,
                 company_email,
                 company_mobile,
+                default_interest,
                 created_by,
                 created_date
             )
-            VALUES (?,?, ?, ?, ?)
+            VALUES (?,?, ?, ?, ?,?)
             `,
                 [
                     company_name,
                     company_email,
                     company_mobile,
+                    default_interest,
                     userId,
                     created_date
                 ]
@@ -389,10 +410,12 @@ export class AuthRepository {
 
             return result;
         } catch (error) {
+
             Sentry.captureException(error);
 
             console.error("insertCompany error", error);
             throw error;
+            
         }
     }
 
@@ -562,8 +585,8 @@ export class AuthRepository {
             const rows = await this.db.query<CustomerId[]>(
                 `
   SELECT customer_id
-  FROM ab_customer 
-  WHERE email = ?
+  FROM customers 
+  WHERE cust_email  = ?
   LIMIT 1
   `,
                 [email]
@@ -578,11 +601,11 @@ export class AuthRepository {
     }
 
 
-    async insertOtp(email: string, hash: string, expiry: Date) {
+    async insertOtp(conn:any,email: string, hash: string, expiry: Date) {
 
         try {
-
-            const result = await this.db.query<ResultSetHeader>(
+const db =conn ?? this.db;
+            const [result] = await db.query(
                 `
      INSERT INTO otp_login
     (
@@ -663,7 +686,7 @@ export class AuthRepository {
 
     async getPassword(email: string): Promise<Customer | null> {
         try {
-            const rows = await this.db.query<Customer[]>('SELECT customer_id, password FROM ab_customer WHERE email = ? limit 1', [email])
+            const rows = await this.db.query<Customer[]>('SELECT customer_id, cust_password FROM customers WHERE cust_email = ? limit 1', [email])
             return rows[0] || null;
         } catch (error) {
             console.error("get Password error is", error);
@@ -673,7 +696,7 @@ export class AuthRepository {
 
     async updatePass(hash: string, email: string) {
         try {
-            const rows = await this.db.query<ResultSetHeader>(`UPDATE ab_customer SET password = ?, is_password_update = 'y' WHERE email = ?`,
+            const rows = await this.db.query<ResultSetHeader>(`UPDATE customers SET cust_password = ? WHERE cust_email = ?`,
                 [hash, email],)
 
             return rows;

@@ -16,6 +16,20 @@ import * as Sentry from '@sentry/node';
 export class ClientRepository {
     constructor(private readonly db: DatabaseService) { }
 
+
+    async getCompanyinterst(companyid: number) {
+        try {
+            const rows = await this.db.query(`select default_interest from company where company_id=?`, [companyid]);
+            return rows[0]?.default_interest;
+        } catch (error) {
+
+            Sentry.captureException(error);
+            console.error('getClient search error', error);
+
+        }
+    }
+
+    
     async getSearchClients(search: string, companyid: number) {
 
         try {
@@ -796,11 +810,11 @@ export class ClientRepository {
     }
 
 
-  async deletClientPermanately(cid: number) {
-    try {
+    async deletClientPermanately(cid: number) {
+        try {
 
-        const result = await this.db.query(
-            `
+            const result = await this.db.query(
+                `
             DELETE FROM clients
             WHERE cl_id = ?
             AND NOT EXISTS (
@@ -810,18 +824,18 @@ export class ClientRepository {
             )
             LIMIT 1
             `,
-            [cid, cid]
-        );
+                [cid, cid]
+            );
 
-        return result;
+            return result;
 
-    } catch (error) {
-        Sentry.captureException(error);
+        } catch (error) {
+            Sentry.captureException(error);
 
-        console.error("delete by id error is", error);
-        throw error;
+            console.error("delete by id error is", error);
+            throw error;
+        }
     }
-}
 
 
     async generateNumber(companyId: number, docType: string, conn?: any): Promise<string> {

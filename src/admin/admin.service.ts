@@ -14,6 +14,83 @@ export class AdminService {
         }
 
 
+         async searchComapany(search: string, page: number,
+    limit: number, userid: number) {
+    try {
+
+
+      const totalRecords = await this.adminRepo.getFilteredCountSearch(search, userid)
+
+      console.log("total Records are", totalRecords)
+
+      const totalPages = Math.ceil(totalRecords / limit);
+
+      const data = await this.adminRepo.getSearchCompany(page, limit, search, userid);
+
+
+      const start = totalRecords === 0 ? 0 : (page - 1) * limit + 1;
+      const end = Math.min(page * limit, totalRecords);
+
+
+      console.log("total pages are ", totalPages)
+      console.log("end is", end)
+
+
+      if (!data || data.length === 0) {
+        return {
+          message: "no banks found",
+          data: [],
+        }
+      }
+
+      return {
+        success: true,
+        message: "bank fetched succesfully",
+        currentPage: page,
+        limit,
+        start,
+        end: end,
+        totalRecords: totalRecords,
+        totalPages: totalPages,
+        nextPage: page < totalPages ? page + 1 : null,
+        previousPage: page > 1 ? page - 1 : null,
+        data
+      }
+    } catch (error) {
+      console.error("Search loans error", error)
+
+      throw new InternalServerErrorException("Failed to get updated data",);
+    }
+  }
+
+
+ async CreateBank(dto: any,userid:number) {
+
+        try {
+
+              dto.remaining_balance =
+      Number(dto.opening_balance || 0);
+
+            const result: any = await this.adminRepo.insertBank(dto,userid);
+
+            // 3️⃣ Check success
+            if (result && result.affectedRows === 1) {
+                return {
+                    success: true,
+                    message: 'bank added successfully',
+                    userId: result.insertId,
+                };
+            }
+
+            throw new InternalServerErrorException("Failed to add bank");
+        }
+        catch (error) {
+            console.error("Create Bank error", error)
+            throw error;
+        }
+    }
+
+
           async getAdminById(aid: number) {
 
     try {
@@ -31,6 +108,30 @@ export class AdminService {
     }
     catch (error) {
       console.error("fail to fetch client", error)
+    }
+
+  }
+
+
+       async getBankById(bid: number) {
+
+    try {
+
+      if (!bid) {
+        throw new BadRequestException("bank id is missing");
+      }
+
+      const data = await this.adminRepo.getBankByid(bid);
+
+      return {
+        message: "bank fetched succesfully"
+        , data
+      }
+    }
+    catch (error) {
+
+      console.error("fail to fetch bank", error)
+
     }
 
   }

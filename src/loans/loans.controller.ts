@@ -8,11 +8,8 @@ import { CreateLoanDto } from './createLoan.dto';
 @Controller('loans')
 export class LoansController {
 
-    constructor(private readonly loanServ: LoansService) {
+    constructor(private readonly loanServ: LoansService) {}
 
-    }
-
-    
     @Post('create_loan')
     @UseGuards(AuthGuard('jwt'))
 
@@ -30,10 +27,13 @@ export class LoansController {
         files: {
             gold_item?: Express.Multer.File[];
             payment_proof_file?: Express.Multer.File[];
-        },) {
+        },) 
+        {
+
         const companyIdNum = Number(companyId);
 
         const loanDto = JSON.parse(data);
+            
         const transactionFIle = files?.payment_proof_file?.[0];
 
         const userId = req.user.userId;
@@ -46,7 +46,6 @@ export class LoansController {
             companyIdNum,
         );
     }
-
 
 
     @Get('get_all_loans')
@@ -64,7 +63,9 @@ export class LoansController {
     @Get('get_bank_account')
 
     async getAllBanks() {
+
         return this.loanServ.getAllAccount()
+
     }
 
 
@@ -108,6 +109,7 @@ export class LoansController {
         @Param('id') loanId: number,
         @Body('data') data: string,
         @Req() req: any,
+        @Headers('comp-id') companyId: string,
         @UploadedFiles()
         files: {
             gold_item?: Express.Multer.File[];
@@ -119,6 +121,7 @@ export class LoansController {
 
         const dto = JSON.parse(data);
         const userId = req.user.userId;
+                const companyIdNum = Number(companyId);
 
         return this.loanServ.updateLoan(
             Number(loanId),
@@ -126,7 +129,10 @@ export class LoansController {
             files,
             transactionFIle,
             userId,
+            companyIdNum,
         );
+
+
     }
 
 
@@ -141,15 +147,19 @@ export class LoansController {
     async getMortgageItemsByLoanId(
         @Param('loanId', ParseIntPipe) loanId: number,
     ) {
+
         return this.loanServ.getMortgageItemsByLoanId(loanId);
+        
     }
 
         @Get('loan_recpt/:loanId')
     @UseGuards(AuthGuard('jwt'))
     async getLoanRecpt(
         @Param('loanId', ParseIntPipe) loanId: number,
-    ) {
+    ) { 
+
         return this.loanServ.getLoanRecpt(loanId);
+        
     }
 
     @Post('client_summary/:clientId')
@@ -166,7 +176,7 @@ export class LoansController {
         const pageNum = Number(page);
         const limitNum = Number(limit);
         return this.loanServ.getClientLoanSummary(clientId, companyIdNum, pageNum, limitNum, filters);
-   
+
     }
 
     @Post("search-loan")
@@ -202,4 +212,6 @@ async searchLoans(
     Number(companyId),
   );
 }
+
+
 }

@@ -14,9 +14,102 @@ export class AdminRepository {
 
     constructor(private readonly db: DatabaseService) { }
 
-
+  async insertBank(
+            data: any,userId:number
+        ) {
+            try {
     
-        async getAdminByid(aid: number) {
+                const payload: any = {
+                    ...data,
+                    created_by: userId
+                };
+    
+
+                Object.keys(payload).forEach(key => {
+                    if (payload[key] === undefined) {
+                        payload[key] = null;
+                    }
+                });
+    
+                const columns = Object.keys(payload).join(", ");
+                const placeholders = Object.keys(payload).map(() => "?").join(", ");
+                const values = Object.values(payload);
+    
+                const result = await this.db.query<ResultSetHeader>(
+                    `INSERT INTO bank_account (${columns}) VALUES (${placeholders})`,
+                    values
+                );
+    
+                return result;
+    
+            } catch (error: any) {
+    
+                Sentry.captureException(error);
+    
+                console.error("❌ insert bank  DB error:", error);
+    
+    
+                throw new InternalServerErrorException(
+                    "Failed to create bank"
+                );
+            }
+        }
+    
+        async getFilteredCountSearch(search: string, userid: number): Promise<number> {
+                try {
+                    const rows = await this.db.query<number>(
+                        `SELECT COUNT(*) as total  FROM company 
+                    WHERE company_name LIKE ? `,
+                        [`%${search}%`],
+                    );
+                    return rows[0].total;
+        
+                }
+        
+                catch (error) {
+                    Sentry.captureException(error);
+        
+                    console.error("getTotalCount error is", error)
+                    throw error;
+                }
+            }
+
+
+            async getSearchCompany(page: number, limit: number, search: string, userid: number) {
+                try {
+                    const rows: any = await this.db.query(
+                        `SELECT * FROM company 
+               company_name LIKE ? `,
+                        [`%${search}%`],
+                    );
+        
+                    return rows;
+                } catch (error) {
+                    Sentry.captureException(error);
+        
+                    console.error('search bank error', error);
+                    throw error;
+                }
+            }
+
+
+        async getBankByid(aid: number) {
+            try {
+                const rows = await this.db.query(
+                    `SELECT * from admins WHERE admin_id = ? LIMIT 1`,
+                    [aid]
+                );
+                return rows;
+            }
+            catch (error) {
+                Sentry.captureException(error);
+    
+                console.error("get bank by id erros is", error)
+                throw error;
+            }
+        }
+
+            async getAdminByid(aid: number) {
             try {
                 const rows = await this.db.query(
                     `SELECT * from admins WHERE admin_id = ? LIMIT 1`,
@@ -31,7 +124,6 @@ export class AdminRepository {
                 throw error;
             }
         }
-
 
     async insertAdmin(data: any, userid: number) {
 

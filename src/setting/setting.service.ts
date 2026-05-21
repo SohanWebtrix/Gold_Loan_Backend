@@ -184,6 +184,9 @@ async UpdateCompany(
 
     await fs.promises.mkdir(folderPath, { recursive: true });
 
+    console.log(dto.remove_logo);
+console.log(typeof dto.remove_logo);
+
     // upload / replace / remove logo
     const logo = await this.replaceCompanyFile(
       logoFile,
@@ -191,7 +194,7 @@ async UpdateCompany(
       'company_logo',
       folderPath,
       existingCompany.company_logo,
-      dto.remove_logo,
+  dto.remove_logo === 'true',
     );
 
     if (logo.filePath) {
@@ -234,6 +237,8 @@ async UpdateCompany(
     };
 
     delete payload.remove_logo;
+    payload.default_interest = payload.default_interest?.trim() || null;
+
 
     const result = await this.settingrepo.updateComapny(
       payload,
@@ -265,6 +270,8 @@ async UpdateCompany(
   } catch (error) {
     console.error('UpdateCompany error', error);
 
+    console.log("inside catch block of update company");
+
     // rollback uploaded files
     await Promise.all(
       uploadedFiles.map(async (filePath) => {
@@ -295,6 +302,8 @@ private async replaceCompanyFile(
 }> {
   // remove existing logo
   if (removeFile) {
+
+    console.log("inside of remove file if removelogo true")
     return {
       dbPath: null,
       oldFileToDelete: oldFilePath ?? null,

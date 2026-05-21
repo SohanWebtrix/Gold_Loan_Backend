@@ -345,7 +345,7 @@ try{
       GREATEST(accrued_interest - ?, 0)
 
     WHERE loan_id = ?
-AND interest_date BETWEEN ? AND CURDATE()    `,
+AND interest_date BETWEEN ? AND CURDATE()`,
     [
       interestPaid,
       loanId,
@@ -1360,7 +1360,6 @@ SELECT
   t.interest_paid,
   t.principal_balance,
   t.interest_balance,
-  t.total_balance,
   t.receipt_no,
   t.paid_amount,
   t.payment_method,
@@ -1379,6 +1378,7 @@ SELECT
   l.loan_start_date,
   l.due_date,
   l.accrued_interest,
+  l.total_amount,
   m.gold_item_id,
   m.category,
   m.morgaged_note,
@@ -1388,7 +1388,11 @@ SELECT
 
   cm.company_name,
   cm.company_email,
-  cm.company_mobile
+  cm.company_mobile,
+    cm.license_number,
+  cm.note,
+  cm.company_logo,
+  cm.address
 
 FROM loan_transactions t
 JOIN clients c ON t.client_id = c.cl_id

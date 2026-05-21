@@ -7,3 +7,45 @@ ADD COLUMN stone_weight DECIMAL(10,2);
 
 2-
 
+alter table bank_account add column remaining_balance int;
+
+3-
+
+ALTER TABLE ledger_entries
+MODIFY COLUMN transaction_date DATETIME;
+
+4-
+
+ALTER TABLE bank_account
+ADD COLUMN created_by INT NULL,
+ADD COLUMN modified_by INT NULL,
+ADD COLUMN created_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN modified_date DATETIME DEFAULT NULL,
+ADD CONSTRAINT fk_bank_account_created_by
+    FOREIGN KEY (created_by)
+    REFERENCES admins(admin_id),
+ADD CONSTRAINT fk_bank_account_modified_by
+    FOREIGN KEY (modified_by)
+    REFERENCES admins(admin_id);
+
+5-
+
+ALTER TABLE bank_account
+MODIFY COLUMN account_type VARCHAR(500);
+
+6-
+alter TABLE company add column default_interest VARCHAR(255);
+
+7-
+
+ALTER TABLE loans 
+ALTER COLUMN loan_document_number SET DEFAULT NULL;
+
+8-
+
+ALTER TABLE loans MODIFY COLUMN interest_rate VARCHAR(255);
+
+9-
+
+ALTER TABLE mortgaged_items MODIFY COLUMN gross_weight DECIMAL(10,2);
+ALTER TABLE mortgaged_items MODIFY COLUMN net_weight DECIMAL(10,2);

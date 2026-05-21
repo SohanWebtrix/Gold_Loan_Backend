@@ -79,8 +79,10 @@ export class SettingController {
   async getCompany(
     @Headers('comp-id') compIdHeader: string,
   ) {
+
     const compIdNumber = compIdHeader ? Number(compIdHeader) : undefined;
     return this.settingservice.getCompanyDetails(compIdNumber);
+    
   }
 
     @Get('get_prefix')

@@ -13,7 +13,6 @@ import { randomBytes } from "crypto";
 import { DateTime } from 'luxon';
 import { filter } from 'rxjs';
 
-
 @Injectable()
 export class LoansService {
   constructor(
@@ -45,6 +44,7 @@ export class LoansService {
 
   async searchLoans(search: string, page: number,
     limit: number, userid: number) {
+
     try {
 
 
@@ -90,6 +90,7 @@ export class LoansService {
 
       throw new InternalServerErrorException("Failed to get updated data",);
     }
+
   }
 
   async getClientLoanSummary(clientId: number, companyId: number, page: number = 1, limit: number = 10, filters: any[] = []) {
@@ -123,12 +124,12 @@ export class LoansService {
         // );
 
         const pendingInterest =
-  loan.loan_status === 'close'
-    ? 0
-    : Number(
-        loan.current_interest_balance ??
-        (interestAmount - totalPaidInterest)
-      );
+          loan.loan_status === 'close'
+            ? 0
+            : Number(
+              loan.current_interest_balance ??
+              (interestAmount - totalPaidInterest)
+            );
 
         const pendinginterestdaily = Number(loan.accrued_interest ?? 0);
 
@@ -147,7 +148,7 @@ export class LoansService {
           total_paid_amount: totalPaidAmount,
           total_paid_principal: totalPaidPrincipal,
           total_paid_interest: totalPaidInterest,
-          total_pending_amount: Math.max(0, pendingAmount),
+          total_pending_amount: Math.round(Math.max(0, pendingAmount)),
           total_pending_principal: Math.max(0, pendingPrincipal),
           total_pending_interest: Math.max(0, pendingInterest),
           last_payment_date: loan.last_payment_date || null,
@@ -265,7 +266,7 @@ export class LoansService {
         },
       };
     } catch (error) {
-            Sentry.captureException(error);
+      Sentry.captureException(error);
 
       console.error('getClientLoanSummary error', error);
       throw new InternalServerErrorException('Failed to fetch client loan summary');
@@ -273,28 +274,87 @@ export class LoansService {
   }
 
   async getMortgageItemsByLoanId(loanId: number) {
+
     try {
+
       const items = await this.loanRepo.getMortgage(loanId);
 
 
-      console.log("items is", items);
+      if (!items?.length) {
+        return {
+          success: true,
+          message: 'No mortgaged items found for this loan',
+          loan_id: loanId,
+          mortgaged_items: [],
+        };
+      }
+
+      const firstItem = items[0];
+
       return {
         success: true,
-        message: items?.length ? 'Mortgaged items fetched successfully' : 'No mortgaged items found for this loan',
-        loan_id: loanId,
-        mortgaged_items: items,
+        message: 'Mortgaged items fetched successfully',
+
+        loan: {
+          loan_id: firstItem.loan_id,
+          loan_no: firstItem.loan_no,
+          principal_amount: firstItem.principal_amount,
+          interest_rate: firstItem.interest_rate,
+          due_date: firstItem.due_date,
+          financial_year: firstItem.financial_year,
+          loan_start_date: firstItem.loan_start_date,
+          transaction_date: firstItem.transaction_date,
+          by_hand: firstItem.created_by_name,
+          total_mortgaged_amount: firstItem.total_mortgaged_amount, // <- here
+        },
+
+        client: {
+          borrower: firstItem.borrower,
+          caste: firstItem.caste,
+          client_code: firstItem.client_code,
+          mobile_no: firstItem.mobile_no,
+          street_add1: firstItem.street_add1,
+          city: firstItem.city,
+          profile_photo: firstItem.profile_pic_path,
+        },
+
+        company: {
+          company_name: firstItem.company_name,
+          license_number: firstItem.license_number,
+          note: firstItem.note,
+          company_logo: firstItem.company_logo,
+          address: firstItem.address,
+        },
+
+
+
+
+        mortgaged_items: items.map((item) => ({
+          mortgaged_id: item.gold_item_id,
+          gold_item: item.gold_item,
+          category: item.category,
+          total_weight: item.total_weight,
+          gross_weight: item.gross_weight,
+          net_weight: item.net_weight,
+          note: item.morgaged_note,
+          amount: item.amount,
+        })),
       };
     } catch (error) {
-            Sentry.captureException(error);
+      Sentry.captureException(error);
 
       console.error('getMortgageItemsByLoanId error', error);
-      throw new InternalServerErrorException('Failed to fetch mortgaged items');
+      throw new InternalServerErrorException(
+        'Failed to fetch mortgaged items',
+      );
     }
   }
 
   async getLoanRecpt(loanId: number) {
     try {
       const items = await this.loanRepo.getLoanById(loanId);
+
+
       return {
         success: true,
         message: 'loan fetched successfully',
@@ -302,7 +362,7 @@ export class LoansService {
         loan: items,
       };
     } catch (error) {
-            Sentry.captureException(error);
+      Sentry.captureException(error);
 
       console.error('getMortgageItemsByLoanId error', error);
       throw new InternalServerErrorException('Failed to fetch mortgaged items');
@@ -398,7 +458,9 @@ export class LoansService {
   ) {
 
     const start = DateTime
-      .fromISO(startDate)
+      .fromISO(startDate, {
+        zone: 'Asia/Kolkata'
+      })
       .startOf('day');
 
     const today = DateTime
@@ -407,7 +469,7 @@ export class LoansService {
       .startOf('day');
 
     // no backdated entries needed
-    if (start > today) {
+    if (start.toMillis() > today.toMillis()) {
 
       return {
         accruedInterest: 0
@@ -426,7 +488,7 @@ export class LoansService {
 
     let current = start;
 
-    while (current <= today) {
+    while (current.toMillis() <= today.toMillis()) {
 
       runningAccrued = Number(
         (
@@ -464,10 +526,26 @@ export class LoansService {
     let uploadedPaths: string[] = [];
     let loanId: number | null = null;
 
-    try 
-    {
+    try {
 
+      const isDraft = dto.loan_status === 'draft';
+
+      console.log("is draft is", isDraft);
       const clientData = await this.loanRepo.getClientstatus(dto.client_id);
+
+      const nowIST = DateTime.now().setZone('Asia/Kolkata');
+
+      const transactionDateTime = DateTime
+        .fromISO(dto.transaction_date, {
+          zone: 'Asia/Kolkata'
+        })
+        .set({
+          hour: nowIST.hour,
+          minute: nowIST.minute,
+          second: nowIST.second,
+          millisecond: 0,
+        })
+        .toFormat('yyyy-MM-dd HH:mm:ss');
 
       if (!clientData) {
         throw new NotFoundException("Client not found");
@@ -479,8 +557,7 @@ export class LoansService {
         );
       }
 
-      const loan_no = await this.loanRepo.generateNumber(companyIdNum, "LOAN")
-      dto.loan_document_number = loan_no;
+      console.log("loan document number is", dto.loan_document_number);
       dto.compl_id = companyIdNum;
       // STEP 1: Insert loan first
 
@@ -500,22 +577,26 @@ export class LoansService {
       dto.total_amount =
         Number(dto.principal_amount);
 
-     const todayObj = DateTime.now()
-  .setZone('Asia/Kolkata')
-  .startOf('day');
+      const todayObj = DateTime.now()
+        .setZone('Asia/Kolkata')
+        .startOf('day');
 
-const todaySql = todayObj.toFormat('yyyy-MM-dd');
+      const todaySql = todayObj.toFormat('yyyy-MM-dd');
 
-const dueDate = DateTime.fromISO(dto.due_date)
-  .setZone('Asia/Kolkata')
-  .startOf('day');
+      if (!isDraft) {
 
-if (dueDate.toMillis() < todayObj.toMillis()) {
-  dto.loan_status = "overdue";
-} else {
-  dto.loan_status = "active";
-}
+        const dueDate = DateTime
+          .fromISO(dto.due_date)
+          .setZone('Asia/Kolkata')
+          .startOf('day');
 
+        dto.loan_status =
+          dueDate.toMillis()
+            < todayObj.toMillis()
+            ? 'overdue'
+            : 'active';
+
+      }
 
       const loanRes = await this.loanRepo.insertLoan(dto, userId);
       console.log("loan id in loanRes is", loanRes)
@@ -523,12 +604,23 @@ if (dueDate.toMillis() < todayObj.toMillis()) {
       loanId = loanRes.insertId;
 
       if (loanId === null) {
+
         throw new Error('Loan ID not generated');
+
       }
 
       // ✅ STEP 3: Create folder using cid
       const folderPath1 = `uploads/loan/${loanId}`;
       await fs.promises.mkdir(folderPath1, { recursive: true });
+
+      if (!isDraft) {
+
+        console.log("inside loan is not draft");
+        const loan_no = await this.loanRepo.generateNumber(companyIdNum, "LOAN")
+        dto.loan_document_number = loan_no;
+
+
+      }
 
       // ✅ STEP 4: Save files
       const [transactionImg] = await Promise.all([
@@ -589,6 +681,43 @@ if (dueDate.toMillis() < todayObj.toMillis()) {
         })
       );
 
+      const folderPathtransaction = `uploads/transaction/${dto.client_id}/${loanId}`;
+
+
+      const disbursementPayments = await Promise.all(
+
+        dto.payments.map(async (item, index) => {
+
+          const file = files?.payment_proof_file?.[index];
+
+          // if (!file) {
+          //   throw new BadRequestException(
+          //     `Gold image required for item ${index + 1}`
+          //   );
+          // }
+
+          const imgPath = await this.saveFile(
+            file,
+            'transaction',
+            folderPathtransaction
+          );
+
+          console.log("img path is ", imgPath)
+
+          if (imgPath) {
+            uploadedPaths.push(imgPath);
+          }
+
+          console.log("upload path for createLoan is", uploadedPaths);
+
+          return {
+            ...item,
+            payment_proof_file: imgPath
+          };
+        })
+
+      );
+
       // STEP 4: Transaction only for child tables
       await this.db.transaction(async (conn) => {
 
@@ -602,51 +731,74 @@ if (dueDate.toMillis() < todayObj.toMillis()) {
         });
 
         if (validNominees?.length) {
+
           await this.loanRepo.insertNomineesBulk(
             finalLoanId,
             validNominees,
             conn
           );
+
         }
 
         if (mortgageItems?.length) {
+
           await this.loanRepo.insertMortgageItemsBulk(
             finalLoanId,
             mortgageItems,
             conn
           );
+
         }
 
+        if (disbursementPayments?.length) {
 
-        const result =
-          await this.generateBackdatedInterest(
+          await this.loanRepo
+            .insertLoanDisbursementsBulk(
+              finalLoanId,
+              companyIdNum,
+              disbursementPayments,
+              conn
+            );
+        }
+
+        if (!isDraft) {
+
+          const result =
+            await this.generateBackdatedInterest(
+              loanId,
+              Number(dto.principal_amount),
+              Number(dto.interest_rate),
+              dto.loan_start_date,
+              conn
+            );
+
+          await this.loanRepo.updateLoanInterest(
             loanId,
-            Number(dto.principal_amount),
-            Number(dto.interest_rate),
-            dto.loan_start_date,
+            {
+              accrued_interest:
+                result.accruedInterest,
+
+              total_amount:
+                Number(dto.principal_amount)
+                + Number(result.accruedInterest),
+
+              last_interest_date: todaySql,
+              loan_document_number: dto.loan_document_number,
+            },
             conn
           );
 
-        await this.loanRepo.updateLoanInterest(
-          loanId,
-          {
-            accrued_interest:
-              result.accruedInterest,
 
-            total_amount:
-              Number(dto.principal_amount)
-              + Number(result.accruedInterest),
+        }
 
-            last_interest_date: todaySql
-          },
-          conn
-        );
+        if (
+          !isDraft &&
+          (
+            dto.loan_status === 'active' ||
+            dto.loan_status === 'overdue'
+          )
+        ) {
 
-
-     if (
-  dto.loan_status === "active" ||
-  dto.loan_status === "overdue"
-) {
           // Generate Receipt Number
           // const receiptNo =
           //   await this.loanRepo.generateNumber(
@@ -691,9 +843,10 @@ if (dueDate.toMillis() < todayObj.toMillis()) {
           //   );
 
           // const transactionId = txRes.insertId;
+
           const istNow = DateTime.now().setZone('Asia/Kolkata').toFormat('yyyy-MM-dd HH:mm:ss');
 
-          const accountBalance:any =
+          const accountBalance: any =
             await this.loanRepo.getLatestAccountBalance(
               dto.account_type,
               conn
@@ -702,17 +855,19 @@ if (dueDate.toMillis() < todayObj.toMillis()) {
           const loanAmount = Number(dto.principal_amount);
 
           if (loanAmount > accountBalance) {
+
             throw new BadRequestException(
               `Insufficient balance. Available balance is ₹${accountBalance}`
             );
+
           }
 
           const accountBalanceAfter =
             accountBalance - loanAmount;
 
-            // await this.loanRepo.updateBankBalance(dto.account_type,accountBalanceAfter,conn)
+          // await this.loanRepo.updateBankBalance(dto.account_type,accountBalanceAfter,conn)
 
-          const loanBalance:any =
+          const loanBalance: any =
             await this.loanRepo.getLatestLoanBalance(
               loanId,
               conn
@@ -736,11 +891,10 @@ if (dueDate.toMillis() < todayObj.toMillis()) {
               status: "debit",
               type: "account",
               entry_date: istNow,
-              transaction_date: dto.transaction_date,
+              transaction_date: transactionDateTime,
             },
             conn
           );
-
 
 
           await this.loanRepo.insertLedger(
@@ -756,13 +910,11 @@ if (dueDate.toMillis() < todayObj.toMillis()) {
               status: "credit",
               type: "loan",
               entry_date: istNow,
-              transaction_date: dto.transaction_date,
+              transaction_date: transactionDateTime,
 
             },
             conn
           );
-
-
 
         }
 
@@ -770,16 +922,19 @@ if (dueDate.toMillis() < todayObj.toMillis()) {
 
       return {
         success: true,
-        message: "Loan created successfully",
+        message: isDraft
+          ? "Loan draft saved successfully"
+          : "Loan created successfully",
         loan_id: loanId
       };
 
-    } catch (error) {
 
-            Sentry.captureException(error);
+    }
 
+    catch (error) {
 
-      // Delete uploaded files
+      Sentry.captureException(error);
+
       for (const filePath of uploadedPaths) {
 
         const finalPaths = path.resolve(filePath.replace(/^[/\\]+/, ''));
@@ -806,6 +961,8 @@ if (dueDate.toMillis() < todayObj.toMillis()) {
     files: any,
     transactionfile: Express.Multer.File | undefined,
     userId: number,
+    companyIdNum: number,
+
   ) {
 
     let newUploads: string[] = [];
@@ -813,6 +970,13 @@ if (dueDate.toMillis() < todayObj.toMillis()) {
 
     try {
 
+      dto.loan_status =
+        dto.loan_status || 'draft';
+
+      const isDraft = dto.loan_status === 'draft';
+
+      const isFinalSave =
+        dto.loan_status === 'active';
       // ==========================================
       // STEP 1: Validate Loan Exists
       // ==========================================
@@ -845,6 +1009,7 @@ if (dueDate.toMillis() < todayObj.toMillis()) {
 
       const fileUpdates: any = {};
 
+
       if (transaction_photo.dbPath !== undefined) {
         fileUpdates.payment_proof_file = transaction_photo.dbPath;
       }
@@ -866,6 +1031,28 @@ if (dueDate.toMillis() < todayObj.toMillis()) {
 
           (dto.mortgaged_items ?? []).map(
             async (item: any) => {
+
+              const removeGoldItem =
+                item.remove_gold_item === true ||
+                item.remove_gold_item === 'true';
+
+              // CASE 1:
+              // user removed image only
+
+              if (
+                removeGoldItem &&
+                (
+                  item.file_index ===
+                  undefined ||
+                  item.file_index === null
+                )
+              ) {
+                return {
+                  ...item,
+                  gold_item: null,
+                };
+              }
+
 
               // no file sent
               if (
@@ -901,6 +1088,7 @@ if (dueDate.toMillis() < todayObj.toMillis()) {
                 ...item,
                 gold_item: fileName,
               };
+
             }
           )
         );
@@ -918,6 +1106,33 @@ if (dueDate.toMillis() < todayObj.toMillis()) {
       } else {
         modified_date = DateTime.utc().toFormat("yyyy-MM-dd HH:mm:ss");
       }
+
+      const todayObj = DateTime.now()
+        .setZone('Asia/Kolkata')
+        .startOf('day');
+
+      const todaySql =
+        todayObj.toFormat('yyyy-MM-dd');
+
+      if (!isDraft) {
+
+        const loan_no = await this.loanRepo.generateNumber(companyIdNum, "LOAN")
+        dto.loan_document_number = loan_no;
+
+
+        const dueDate = DateTime
+          .fromISO(dto.due_date)
+          .setZone('Asia/Kolkata')
+          .startOf('day');
+
+        dto.loan_status =
+          dueDate.toMillis()
+            < todayObj.toMillis()
+            ? 'overdue'
+            : 'active';
+
+      }
+
 
       // ==========================================
       // STEP 4: Transaction
@@ -968,6 +1183,129 @@ if (dueDate.toMillis() < todayObj.toMillis()) {
 
           oldFilesToDelete =
             deletedOldFiles;
+
+
+          if (isFinalSave) {
+
+
+
+            // interest generation
+            const result =
+              await this.generateBackdatedInterest(
+                loanId,
+                Number(dto.principal_amount),
+                Number(dto.interest_rate),
+                dto.loan_start_date,
+                conn
+              );
+
+            await this.loanRepo.updateLoanInterest(
+              loanId,
+              {
+                accrued_interest:
+                  result.accruedInterest,
+
+                total_amount:
+                  Number(dto.principal_amount)
+                  + Number(result.accruedInterest),
+
+                last_interest_date:
+                  todaySql,
+
+                loan_status:
+                  dto.loan_status,
+
+                loan_document_number: dto.loan_document_number
+              },
+              conn
+            );
+
+            // -------------------------
+            // Ledger logic
+            // -------------------------
+            const istNow = DateTime.now()
+              .setZone('Asia/Kolkata')
+              .toFormat(
+                'yyyy-MM-dd HH:mm:ss'
+              );
+
+            const accountBalance: any =
+              await this.loanRepo
+                .getLatestAccountBalance(
+                  dto.account_type,
+                  conn
+                );
+
+            const loanAmount =
+              Number(dto.principal_amount);
+
+            if (loanAmount > accountBalance) {
+              throw new BadRequestException(
+                `Insufficient balance. Available balance is ₹${accountBalance}`
+              );
+            }
+
+            const accountBalanceAfter =
+              accountBalance - loanAmount;
+
+            const loanBalance: any =
+              await this.loanRepo
+                .getLatestLoanBalance(
+                  loanId,
+                  conn
+                );
+
+            const loanBalanceAfter =
+              loanBalance + loanAmount;
+
+            await this.loanRepo.insertLedger(
+              {
+                loan_id: loanId,
+                client_id: dto.client_id,
+                company_id: loan.compl_id,
+                account_id:
+                  dto.account_type,
+                credit: 0,
+                debit:
+                  dto.principal_amount,
+                entry_type:
+                  'Disbursement Amount Paid',
+                remarks:
+                  'Paid from selected account',
+                balance_after:
+                  accountBalanceAfter,
+                status: 'debit',
+                type: 'account',
+                entry_date: istNow,
+                transaction_date:
+                  dto.transaction_date,
+              },
+              conn
+            );
+
+            await this.loanRepo.insertLedger(
+              {
+                loan_id: loanId,
+                client_id: dto.client_id,
+                company_id: loan.compl_id,
+                credit:
+                  dto.principal_amount,
+                debit: 0,
+                balance_after:
+                  loanBalanceAfter,
+                entry_type:
+                  'Disbursement Amount Paid',
+                remarks:
+                  'Loan given to customer',
+                status: 'credit',
+                type: 'loan',
+                entry_date: istNow,
+                transaction_date:
+                  dto.transaction_date,
+              },
+              conn
+            );
+          }
         }
       );
 
@@ -995,7 +1333,7 @@ if (dueDate.toMillis() < todayObj.toMillis()) {
 
     } catch (error) {
 
-            Sentry.captureException(error);
+      Sentry.captureException(error);
 
       // delete new uploaded files
       for (const p of newUploads) {
@@ -1158,20 +1496,40 @@ if (dueDate.toMillis() < todayObj.toMillis()) {
               item.gold_item_id
           );
 
-        if (
-          item.gold_item &&
-          old &&
-          old.gold_item &&
-          old.gold_item !==
-          item.gold_item
-        ) {
-          console.log("inside old")
-          oldFiles.push(
+        // if (
+        //   item.gold_item &&
+        //   old &&
+        //   old.gold_item &&
+        //   old.gold_item !==
+        //   item.gold_item
+        // ) {
+        //   console.log("inside old")
+        //   oldFiles.push(
 
-            old.gold_item
+        //     old.gold_item
 
-          );
+        //   );
 
+        // }
+
+        if (old?.gold_item) {
+
+          // replaced image
+          if (
+            item.gold_item &&
+            old.gold_item !== item.gold_item
+          ) {
+            oldFiles.push(
+              old.gold_item
+            );
+          }
+
+          // removed image
+          if (item.gold_item === null) {
+            oldFiles.push(
+              old.gold_item
+            );
+          }
         }
 
         await this.loanRepo
@@ -1307,7 +1665,6 @@ if (dueDate.toMillis() < todayObj.toMillis()) {
 
     }
   }
-
 
 
   async getLoanById(loanId: number) {
