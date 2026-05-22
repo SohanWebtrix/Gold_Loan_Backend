@@ -15,6 +15,57 @@ export class TransactionRepository {
 
     }
 
+
+      async insertTransactionPayment(
+        loanId: number,
+        companyid: number,
+        payments: any[],
+        conn: any
+    ) {
+
+        try{
+
+        const values = payments.map(
+            item => [
+                loanId,
+                companyid,
+                item.account_id,
+                item.payment_type,
+                item.amount,
+                item.transaction_reference_no || null,
+                item.transaction_date || null,
+                item.note || null,
+                item.payment_proof_file || null
+            ]
+        );
+
+        await conn.query(
+            `
+    INSERT INTO transaction_payment (
+      loan_id,
+      company_id,
+      account_id,
+      payment_type,
+      amount,
+      transaction_reference_no,
+      transaction_date,
+      note,
+      payment_proof_file
+    )
+    VALUES ?
+    `,
+            [values]
+        );
+    }
+    catch(error)
+    {
+
+        console.error("insert loan disbursement bulk error is",error);
+
+    }
+    }
+
+    
     async updateBankBalance(accountid: number, account_balance: number, conn) {
 
         try {
@@ -932,6 +983,8 @@ LIMIT 1
             const payload = {
                 ...data
             };
+
+            delete payload.payments;
 
             Object.keys(payload).forEach(key => {
                 if (payload[key] === undefined) {

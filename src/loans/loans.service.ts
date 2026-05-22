@@ -526,7 +526,8 @@ export class LoansService {
     let uploadedPaths: string[] = [];
     let loanId: number | null = null;
 
-    try {
+    try 
+    {
 
       const isDraft = dto.loan_status === 'draft';
 
@@ -629,7 +630,6 @@ export class LoansService {
         throw new Error("Client file update failed");
       }
 
-
       const finalLoanId = loanId;
       // STEP 2: Folder path
       const folderPath = `uploads/gold/${userId}/${dto.client_id}/${loanId}`;
@@ -637,44 +637,75 @@ export class LoansService {
       await fs.promises.mkdir(folderPath, { recursive: true });
 
       // STEP 3: Upload files
-      const mortgageItems = await Promise.all(
-        dto.mortgaged_items.map(async (item, index) => {
+    const mortgageItems = await Promise.all(
+  (dto.mortgaged_items ?? []).map(async (item: any) => {
 
-          const file = files?.gold_item?.[index];
+    const hasFileIndex =
+      item.file_index !== undefined &&
+      item.file_index !== null &&
+      item.file_index !== '';
 
-          // if (!file) {
-          //   throw new BadRequestException(
-          //     `Gold image required for item ${index + 1}`
-          //   );
-          // }
+    // no image uploaded
+    if (!hasFileIndex) {
 
-          const imgPath = await this.saveFile(
-            file,
-            'gold',
-            folderPath
-          );
+      return {
+        ...item,
+        gold_item: null
+      };
 
-          console.log("img path is ", imgPath)
+    }
 
-          if (imgPath) {
-            uploadedPaths.push(imgPath);
-          }
+    const file =
+      files?.gold_item?.[item.file_index];
 
-
-          return {
-            ...item,
-            gold_item: imgPath
-          };
-        })
+    if (!file) {
+      throw new BadRequestException(
+        `File missing for index ${item.file_index}`
       );
+    }
+
+    const imgPath = await this.saveFile(
+      file,
+      'gold',
+      folderPath
+    );
+
+    if (imgPath) {
+      uploadedPaths.push(imgPath);
+    }
+
+    return {
+      ...item,
+      gold_item: imgPath
+    };
+  })
+);
 
       const folderPathtransaction = `uploads/transaction/${dto.client_id}/${loanId}`;
-      await fs.promises.mkdir(folderPathtransaction, { recursive: true });
 
+      await fs.promises.mkdir(folderPathtransaction, { recursive: true });
 
       const disbursementPayments = await Promise.all(
 
+
         (dto.payments ?? []).map(async (item, index) => {
+
+          
+    const hasFileIndex =
+      item.file_index !== undefined &&
+      item.file_index !== null &&
+      item.file_index !== '';
+
+    // no image uploaded
+    if (!hasFileIndex) {
+
+      return {
+        ...item,
+        payment_proof_file: null
+      };
+
+    }
+
 
           const file = files?.payment_proof_file?.[index];
 
@@ -734,6 +765,7 @@ export class LoansService {
             mortgageItems,
             conn
           );
+
 
         }
 
@@ -1454,8 +1486,9 @@ export class LoansService {
 
       return {
         success: true,
-        message:
-          'Loan updated successfully',
+              message: isFinalSave
+          ? "Loan  Updated successfully"
+          : "Loan Draft Updated successfully",
         loan_id: loanId,
       };
 
@@ -1659,18 +1692,21 @@ export class LoansService {
             oldFiles.push(
               old.payment_proof_file
             );
+
           }
 
           // removed file
           if (
             payment.payment_proof_file ===
             null
-          ) {
+          ) 
+          {
 
             oldFiles.push(
               old.payment_proof_file
             );
           }
+
         }
 
         await this.loanRepo
@@ -1679,6 +1715,7 @@ export class LoansService {
             payment,
             conn
           );
+
       }
 
       // INSERT
@@ -1749,7 +1786,8 @@ export class LoansService {
       );
 
     console.log("deleted Rows are", deleteRows);
-    if (deleteRows.length) {
+    if (deleteRows.length)
+       {
 
       await this.loanRepo
         .deleteMortgageItemsBulk(
@@ -1860,6 +1898,7 @@ export class LoansService {
       .trim();
 
     // sanitize filename
+
     const safeName = baseName
       .replace(/\s+/g, '_')        // spaces -> _
       .replace(/[^a-zA-Z0-9_-]/g, ''); // remove special chars

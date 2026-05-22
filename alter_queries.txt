@@ -49,3 +49,57 @@ ALTER TABLE loans MODIFY COLUMN interest_rate VARCHAR(255);
 
 ALTER TABLE mortgaged_items MODIFY COLUMN gross_weight DECIMAL(10,2);
 ALTER TABLE mortgaged_items MODIFY COLUMN net_weight DECIMAL(10,2);
+
+10 - New Tables 
+
+otp_login,loan_disbursements
+
+CREATE TABLE loan_disbursements (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    loan_id INT,
+    company_id INT,
+    account_id INT,
+    payment_type VARCHAR(50) NOT NULL,
+    amount INT,
+    transaction_reference_no VARCHAR(255) NULL,
+    transaction_date DATETIME NULL,
+    note TEXT NULL,
+    payment_proof_file VARCHAR(500) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Named Foreign Key Constraints
+    CONSTRAINT fk_loan_disbursements_loan FOREIGN KEY (loan_id) REFERENCES loans(loan_id),
+    CONSTRAINT fk_loan_disbursements_company FOREIGN KEY (company_id) REFERENCES company(company_id),
+    CONSTRAINT fk_loan_disbursements_bank_account FOREIGN KEY (account_id) REFERENCES bank_account(id)
+);
+
+
+
+11-
+
+ALTER TABLE mortgaged_items
+    MODIFY COLUMN total_weight VARCHAR(255),
+    MODIFY COLUMN gross_weight VARCHAR(255),
+    MODIFY COLUMN stone_weight VARCHAR(255),
+    MODIFY COLUMN net_weight VARCHAR(255),
+    MODIFY COLUMN rate VARCHAR(255),
+    MODIFY COLUMN amount VARCHAR(255);
+
+
+12-
+
+ALTER TABLE bank_account
+DROP FOREIGN KEY fk_bank_account_created_by;
+
+ALTER TABLE bank_account
+DROP FOREIGN KEY fk_bank_account_modified_by;
+
+ALTER TABLE bank_account
+ADD CONSTRAINT fk_bank_account_created_by_customer
+FOREIGN KEY (created_by)
+REFERENCES customers(customer_id);
+
+ALTER TABLE bank_account
+ADD CONSTRAINT fk_bank_account_modified_by_customer
+FOREIGN KEY (modified_by)
+REFERENCES customers(customer_id);

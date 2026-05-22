@@ -303,7 +303,7 @@ export class LoanRepository {
 
       accrued_interest = ?,
       total_amount=?,
-        last_interest_date = ?,
+        last_interest_date = ?
     WHERE loan_id = ?
     `,
                 [
@@ -1625,6 +1625,8 @@ WHERE m.loan_id = ?
             // remove fields not needed in SQL
             delete payload.id;
             delete payload.proof_file_index;
+                        delete payload.remove_payment_proof;
+
 
             // convert undefined => null
             Object.keys(payload).forEach((key) => {
@@ -1694,6 +1696,8 @@ WHERE m.loan_id = ?
             };
 
             delete payload.proof_file_index;
+                        delete payload.remove_payment_proof;
+
 
 
             // convert undefined => null
@@ -1754,6 +1758,7 @@ WHERE m.loan_id = ?
 
             delete payload.gold_item_id;
             delete payload.file_index;
+            delete payload.remove_gold_item;
 
 
             // convert undefined => null
@@ -1810,6 +1815,7 @@ WHERE m.loan_id = ?
 
             // remove fields not needed in SQL
             delete payload.gold_item_id;
+            delete payload.remove_gold_item;
             delete payload.file_index;
 
             // convert undefined => null

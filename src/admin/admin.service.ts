@@ -3,6 +3,9 @@ import { BadRequestException, Injectable, InternalServerErrorException } from '@
 import { AdminRepository } from './admin.repository/admin.repository';
 import { DateTime } from 'luxon';
 import { ADMIN_FILTER_SCHEMA } from './admin.filter.schema';
+import * as Sentry from '@sentry/node';
+import { BANK_FILTER_SCHEMA } from './bank.filter.schema';
+
 
 @Injectable()
 export class AdminService {
@@ -12,6 +15,82 @@ export class AdminService {
         ) {
     
         }
+
+
+          async getBankList(
+            page: number,
+            limit: number,
+            filters: any[] = [],
+            comapanyid: number
+          ) 
+          {
+        
+            // const customer = await this.customerRepo.findById(userId);
+            // const companyId = customer.comp_id;
+        
+            try {
+        
+              if (page < 1) page = 1;
+              if (limit < 1) limit = 10;
+        
+              // 🔑 MAP FILTERS HERE
+              const validatedFilters = filters.map((f) => {
+                const schema = BANK_FILTER_SCHEMA[f.field];
+        
+                if (!schema) {
+                  throw new Error(`Invalid filter field: ${f.field}`);
+                }
+        
+                if (!schema.operators.includes(f.operator)) {
+                  throw new Error(`Invalid operator for field: ${f.field}`);
+                }
+        
+                return {
+                  column: schema.column,
+                  type: schema.type,
+                  operator: f.operator,
+                  value: f.value,
+                  valueTo: f.valueTo
+                };
+              });
+        
+        
+              const totalRecords =
+                validatedFilters.length > 0
+                  ? await this.adminRepo.getFilteredCountbank(validatedFilters, comapanyid)
+                  : await this.adminRepo.getTotalCountbank(comapanyid);
+        
+              const totalPages = Math.ceil(totalRecords / limit);
+        
+              const data =
+                validatedFilters.length > 0
+                  ? await this.adminRepo.findWithFiltersbank(validatedFilters, page, limit, comapanyid)
+                  : await this.adminRepo.findAllbank(page, limit, comapanyid);
+        
+              const start = totalRecords === 0 ? 0 : (page - 1) * limit + 1;
+              const end = Math.min(page * limit, totalRecords);
+        
+              return {
+                currentPage: page,
+                limit,
+                start,
+                end,
+                totalRecords,
+                totalPages,
+                nextPage: page < totalPages ? page + 1 : null,
+                previousPage: page > 1 ? page - 1 : null,
+                data,
+              };
+            }
+            catch (error) {
+        
+              Sentry.captureException(error);
+        
+              console.error("getBeneficiarylist error", error)
+              throw new InternalServerErrorException("Failed to fetch Client list");
+        
+            }
+          }
 
 
          async searchComapany(search: string, page: number,
@@ -64,14 +143,19 @@ export class AdminService {
   }
 
 
- async CreateBank(dto: any,userid:number) {
+ async CreateBank(dto: any,userid:number,companyId:number) {
 
         try {
+
+          if(!companyId)
+          {
+            throw new Error("comapny id is required");
+          }
 
               dto.remaining_balance =
       Number(dto.opening_balance || 0);
 
-            const result: any = await this.adminRepo.insertBank(dto,userid);
+            const result: any = await this.adminRepo.insertBank(dto,companyId,userid);
 
             // 3️⃣ Check success
             if (result && result.affectedRows === 1) {

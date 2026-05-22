@@ -57,7 +57,7 @@ export class TransactionsService {
     filters: any[] = [],
     companyIdNum: number
   ) {
-    
+
     try {
 
       if (page < 1) page = 1;
@@ -134,12 +134,14 @@ export class TransactionsService {
 
   async createTransaction(
     dto: any,
-    paymentProofFile: Express.Multer.File | undefined,
+    files: any,
     userId: number,
     companyId: number,
   ) {
     let folderPath: string | null = null;
     let transactionId: number | null = null;
+    let uploadedPaths: string[] = [];
+
 
     try {
       dto.company_id = companyId;
@@ -375,12 +377,86 @@ export class TransactionsService {
 
       }
 
+
+      const folderPathtransaction = `uploads/transaction_payment/${dto.loan_id}`;
+
+      await fs.promises.mkdir(folderPathtransaction, { recursive: true });
+
+      const payments =
+        typeof dto.payments === 'string'
+          ? JSON.parse(dto.payments)
+          : dto.payments ?? [];
+
+      const disbursementPayments = await Promise.all(
+
+
+        payments.map(async (item, index) => {
+
+
+          const hasFileIndex =
+            item.proof_file_index !== undefined &&
+            item.proof_file_index !== null &&
+            item.proof_file_index !== '';
+
+          // no image uploaded
+          if (!hasFileIndex) {
+
+            return {
+              ...item,
+              payment_proof_file: null
+            };
+
+          }
+
+
+          const file = files?.payment_proof_file?.[index];
+
+          // if (!file) {
+          //   throw new BadRequestException(
+          //     `Gold image required for item ${index + 1}`
+          //   );
+          // }
+
+          const imgPath = await this.saveFile(
+            file,
+            'transaction',
+            folderPathtransaction
+          );
+
+          console.log("img path is ", imgPath)
+
+          if (imgPath) {
+            uploadedPaths.push(imgPath);
+          }
+
+
+          return {
+            ...item,
+            payment_proof_file: imgPath
+          };
+        })
+
+      );
+
+
+
       // =====================================
       // STEP 5 INSERT TRANSACTION ONLY
       // =====================================
       const result =
         await this.db.transaction(async (conn) => {
           dto.receipt_no = await this.transactionrepo.generateNumber(companyId, "TRANSACTION", conn);
+
+          if (disbursementPayments?.length) {
+
+            await this.transactionrepo
+              .insertTransactionPayment(
+                dto.loan_id,
+                companyId,
+                disbursementPayments,
+                conn
+              );
+          }
 
           const insertResult =
             await this.transactionrepo.insertTransaction(
@@ -516,190 +592,297 @@ export class TransactionsService {
 
           if (dto.transaction_type === 'TOPUP') {
 
+            let totalTopup = 0;
+
+            for (const payment of disbursementPayments) {
+
+              const accountId =
+                Number(payment.account_id);
+
+              const paidAmount =
+                Number(payment.amount || 0);
+
+              totalTopup += paidAmount;
+
+              const latestAccountBalance: any =
+                await this.transactionrepo
+                  .getLatestAccountBalance(
+                    accountId,
+                    conn
+                  );
+
+              if (
+                paidAmount >
+                latestAccountBalance
+              ) {
+                throw new BadRequestException(
+                  `Insufficient balance in account ${accountId}`
+                );
+              }
+
+              const accountBalanceAfter =
+                latestAccountBalance -
+                paidAmount;
+
+              await this.transactionrepo.updateBankBalance(payment.account_id, accountBalanceAfter, conn)
+
+
+              // ACCOUNT ENTRY
+              await this.transactionrepo
+                .insertLedger(
+                  {
+                    transaction_id: insertId,
+                    loan_id: dto.loan_id,
+                    client_id:
+                      loan.client_id,
+                    company_id:
+                      companyId,
+
+                    account_id:
+                      accountId,
+
+                    debit:
+                      paidAmount,
+                    credit: 0,
+
+                    entry_type:
+                      dto.transaction_type,
+
+                    balance_after:
+                      accountBalanceAfter,
+
+                    status: "debit",
+                    type: "account",
+
+                    entry_date:
+                      istNow,
+
+                    transaction_date:
+                      transactionDateTime,
+                  },
+                  conn
+                );
+            }
+
+            // SINGLE LOAN ENTRY
             const loanBalanceAfter =
-              latestLoanBalance + Number(topupAmount);
+              latestLoanBalance +
+              totalTopup;
 
-            const accountBalanceAfter =
-              latestAccountBalance - Number(topupAmount);
+            await this.transactionrepo
+              .insertLedger(
+                {
+                  transaction_id:
+                    insertId,
 
-            //  await this.transactionrepo.updateBankBalance(dto.account_type,accountBalanceAfter,conn)
+                  loan_id:
+                    dto.loan_id,
 
-            // CR Account (cash/bank decrease)
-            await this.transactionrepo.insertLedger(
-              {
-                transaction_id: insertId,
-                loan_id: dto.loan_id,
-                client_id: loan.client_id,
-                company_id: companyId,
-                account_id: dto.account_type,
-                balance_after: accountBalanceAfter,
-                debit: topupAmount,
-                credit: 0,
-                entry_type: dto.transaction_type,
-                status: "debit",
-                type: "account",
-                entry_date: istNow,
-                transaction_date: transactionDateTime,
+                  client_id:
+                    loan.client_id,
 
-              },
-              conn
-            );
+                  company_id:
+                    companyId,
 
+                  balance_after:
+                    loanBalanceAfter,
 
-            // CR Loan Receivable (asset increase)
-            await this.transactionrepo.insertLedger(
-              {
-                transaction_id: insertId,
-                loan_id: dto.loan_id,
-                client_id: loan.client_id,
-                company_id: companyId,
-                balance_after: loanBalanceAfter,
-                debit: 0,
-                credit: topupAmount,
-                entry_type: dto.transaction_type,
-                status: "credit",
-                type: "loan",
-                entry_date: istNow,
-                transaction_date: transactionDateTime,
+                  debit: 0,
+                  credit:
+                    totalTopup,
 
-              },
-              conn
-            );
+                  entry_type:
+                    dto.transaction_type,
 
+                  status:
+                    "credit",
+
+                  type:
+                    "loan",
+
+                  entry_date:
+                    istNow,
+
+                  transaction_date:
+                    transactionDateTime,
+                },
+                conn
+              );
           }
 
-          else if (dto.transaction_type === 'Loan + Interest Amount Paid') {
+          else if (
+            dto.transaction_type ===
+            'Loan + Interest Amount Paid'
+          ) {
 
+            // LOAN PRINCIPAL ENTRY
             const loanBalanceAfter =
-              latestLoanBalance - principalPaid;
+              latestLoanBalance -
+              principalPaid;
 
-            let runningAccountBalance = latestAccountBalance;
+            await this.transactionrepo
+              .insertLedger(
+                {
+                  transaction_id:
+                    insertId,
 
-            runningAccountBalance += principalPaid;
-            // =========================
-            // 1. DR Loan Receivable
-            // =========================
+                  loan_id:
+                    dto.loan_id,
 
-            await this.transactionrepo.insertLedger(
-              {
-                transaction_id: insertId,
-                loan_id: dto.loan_id,
-                client_id: loan.client_id,
-                company_id: companyId,
+                  client_id:
+                    loan.client_id,
 
-                debit: principalPaid,
-                credit: 0,
+                  company_id:
+                    companyId,
 
-                entry_type: dto.transaction_type,
+                  debit:
+                    principalPaid,
 
-                balance_after: loanBalanceAfter,
+                  credit: 0,
 
-                status: "debit",
-                type: "loan",
+                  entry_type:
+                    dto.transaction_type,
 
-                entry_date: istNow,
-                transaction_date: transactionDateTime,
-              },
-              conn
-            );
+                  balance_after:
+                    loanBalanceAfter,
 
-            // =========================
-            // 2. CR Bank Account
-            // =========================
+                  status:
+                    "debit",
 
-            await this.transactionrepo.insertLedger(
-              {
-                transaction_id: insertId,
-                loan_id: dto.loan_id,
-                client_id: loan.client_id,
-                company_id: companyId,
+                  type:
+                    "loan",
 
-                account_id: dto.account_type,
+                  entry_date:
+                    istNow,
 
-                debit: 0,
-                credit: principalPaid,
+                  transaction_date:
+                    transactionDateTime,
+                },
+                conn
+              );
 
-                entry_type: dto.transaction_type,
-
-                balance_after: runningAccountBalance,
-
-                status: "credit",
-                type: "account",
-
-                entry_date: istNow,
-                transaction_date: transactionDateTime,
-              },
-              conn
-            );
-
-            // =========================
-            // 3. DR Interest Income
-            // =========================
-            runningAccountBalance += interestPaid;
-
+            // INTEREST ENTRY
             const interestBalanceAfter =
-              latestInterestBalance + interestPaid;
+              latestInterestBalance +
+              interestPaid;
 
-            await this.transactionrepo.insertLedger(
-              {
-                transaction_id: insertId,
-                loan_id: dto.loan_id,
-                client_id: loan.client_id,
-                company_id: companyId,
+            await this.transactionrepo
+              .insertLedger(
+                {
+                  transaction_id:
+                    insertId,
 
-                debit: interestPaid,
-                credit: 0,
+                  loan_id:
+                    dto.loan_id,
 
-                entry_type: dto.transaction_type,
+                  client_id:
+                    loan.client_id,
 
-                balance_after: interestBalanceAfter,
+                  company_id:
+                    companyId,
 
-                status: "debit",
-                type: "interest",
+                  debit:
+                    interestPaid,
 
-                entry_date: istNow,
-                transaction_date: transactionDateTime,
-              },
-              conn
-            );
+                  credit: 0,
 
-            // =========================
-            // 4. CR Bank Account
-            // =========================
+                  entry_type:
+                    dto.transaction_type,
 
-            await this.transactionrepo.insertLedger(
-              {
-                transaction_id: insertId,
-                loan_id: dto.loan_id,
-                client_id: loan.client_id,
-                company_id: companyId,
+                  balance_after:
+                    interestBalanceAfter,
 
-                account_id: dto.account_type,
+                  status:
+                    "debit",
 
-                debit: 0,
-                credit: interestPaid,
+                  type:
+                    "interest",
 
-                entry_type: dto.transaction_type,
+                  entry_date:
+                    istNow,
 
-                balance_after: runningAccountBalance,
+                  transaction_date:
+                    transactionDateTime,
+                },
+                conn
+              );
 
-                status: "credit",
-                type: "account",
+            let totalReceived = 0;
 
-                entry_date: istNow,
-                transaction_date: transactionDateTime,
-              },
-              conn
-            );
+            for (const payment of disbursementPayments) {
 
-            // await this.transactionrepo.updateBankBalance(dto.account_type,runningAccountBalance,conn)
+              const accountId =
+                Number(payment.account_id);
+
+              const paidAmount =
+                Number(payment.amount || 0);
+
+              totalReceived +=
+                paidAmount;
+
+              const latestAccountBalance: any =
+                await this.transactionrepo
+                  .getLatestAccountBalance(
+                    accountId,
+                    conn
+                  );
+
+              const accountBalanceAfter =
+                latestAccountBalance +
+                paidAmount;
+
+              await this.transactionrepo.updateBankBalance(payment.account_id, accountBalanceAfter, conn)
+
+
+              // MULTIPLE ACCOUNT CREDIT
+              await this.transactionrepo
+                .insertLedger(
+                  {
+                    transaction_id:
+                      insertId,
+
+                    loan_id:
+                      dto.loan_id,
+
+                    client_id:
+                      loan.client_id,
+
+                    company_id:
+                      companyId,
+
+                    account_id:
+                      accountId,
+
+                    debit: 0,
+                    credit:
+                      paidAmount,
+
+                    entry_type:
+                      dto.transaction_type,
+
+                    balance_after:
+                      accountBalanceAfter,
+
+                    status:
+                      "credit",
+
+                    type:
+                      "account",
+
+                    entry_date:
+                      istNow,
+
+                    transaction_date:
+                      transactionDateTime,
+                  },
+                  conn
+                );
+            }
+
 
           }
 
           else if (dto.transaction_type === 'Interest Amount Paid') {
-
-            const accountBalanceAfter =
-              latestAccountBalance + interestPaid;
 
             const interestBalanceAfter =
               latestInterestBalance + interestPaid;
@@ -708,7 +891,6 @@ export class TransactionsService {
             // =========================
 
 
-
             await this.transactionrepo.insertLedger(
               {
                 transaction_id: insertId,
@@ -732,34 +914,76 @@ export class TransactionsService {
               conn
             );
 
-            // =========================
-            // 2. CR Bank/Cash Account
-            // =========================
+            let totalReceived = 0;
 
-            await this.transactionrepo.insertLedger(
-              {
-                transaction_id: insertId,
-                loan_id: dto.loan_id,
-                client_id: loan.client_id,
-                company_id: companyId,
+            for (const payment of disbursementPayments) {
 
-                account_id: dto.account_type,
+              const accountId =
+                Number(payment.account_id);
 
-                debit: 0,
-                credit: interestPaid,
+              const paidAmount =
+                Number(payment.amount || 0);
 
-                entry_type: dto.transaction_type,
+              totalReceived +=
+                paidAmount;
 
-                balance_after: accountBalanceAfter,
+              const latestAccountBalance: any =
+                await this.transactionrepo
+                  .getLatestAccountBalance(
+                    accountId,
+                    conn
+                  );
 
-                status: "credit",
-                type: "account",
+              const accountBalanceAfter =
+                latestAccountBalance +
+                paidAmount;
 
-                entry_date: istNow,
-                transaction_date: transactionDateTime,
-              },
-              conn
-            );
+              await this.transactionrepo.updateBankBalance(payment.account_id, accountBalanceAfter, conn)
+
+              // MULTIPLE ACCOUNT CREDIT
+              await this.transactionrepo
+                .insertLedger(
+                  {
+                    transaction_id:
+                      insertId,
+
+                    loan_id:
+                      dto.loan_id,
+
+                    client_id:
+                      loan.client_id,
+
+                    company_id:
+                      companyId,
+
+                    account_id:
+                      accountId,
+
+                    debit: 0,
+                    credit:
+                      paidAmount,
+
+                    entry_type:
+                      dto.transaction_type,
+
+                    balance_after:
+                      accountBalanceAfter,
+
+                    status:
+                      "credit",
+
+                    type:
+                      "account",
+
+                    entry_date:
+                      istNow,
+
+                    transaction_date:
+                      transactionDateTime,
+                  },
+                  conn
+                );
+            }
 
             // await this.transactionrepo.updateBankBalance(dto.account_type,accountBalanceAfter,conn)
 
@@ -796,36 +1020,83 @@ export class TransactionsService {
             // Ledger Entry 2
             // CR Selected Account
             // -------------------------------------
+            let totalReceived = 0;
 
-            await this.transactionrepo.insertLedger(
-              {
-                transaction_id: insertId,
-                loan_id: dto.loan_id,
-                client_id: loan.client_id,
-                company_id: companyId,
-                account_id: dto.account_type,
-                debit: 0,
-                credit: principalPaid,
-                entry_type: dto.transaction_type,
-                balance_after: accountBalanceAfter,
+            for (const payment of disbursementPayments) {
 
-                status: "credit",
-                type: "account",
-                entry_date: istNow,
-                transaction_date: transactionDateTime,
+              const accountId =
+                Number(payment.account_id);
 
+              const paidAmount =
+                Number(payment.amount || 0);
 
-              },
-              conn
-            );
+              totalReceived +=
+                paidAmount;
+
+              const latestAccountBalance: any =
+                await this.transactionrepo
+                  .getLatestAccountBalance(
+                    accountId,
+                    conn
+                  );
+
+              const accountBalanceAfter =
+                latestAccountBalance +
+                paidAmount;
+
+              await this.transactionrepo.updateBankBalance(payment.account_id, accountBalanceAfter, conn)
+
+              // MULTIPLE ACCOUNT CREDIT
+              await this.transactionrepo
+                .insertLedger(
+                  {
+                    transaction_id:
+                      insertId,
+
+                    loan_id:
+                      dto.loan_id,
+
+                    client_id:
+                      loan.client_id,
+
+                    company_id:
+                      companyId,
+
+                    account_id:
+                      accountId,
+
+                    debit: 0,
+                    credit:
+                      paidAmount,
+
+                    entry_type:
+                      dto.transaction_type,
+
+                    balance_after:
+                      accountBalanceAfter,
+
+                    status:
+                      "credit",
+
+                    type:
+                      "account",
+
+                    entry_date:
+                      istNow,
+
+                    transaction_date:
+                      transactionDateTime,
+                  },
+                  conn
+                );
+            }
 
             // await this.transactionrepo.updateBankBalance(dto.account_type,accountBalanceAfter,conn)
+
           }
-          
+
           return insertId;
         });
-
-
 
       console.log("result is", result);
       transactionId = result;
@@ -840,28 +1111,28 @@ export class TransactionsService {
       // =====================================
       // STEP 6 FILE SAVE OUTSIDE TRANSACTION
       // =====================================
-      folderPath =
-        `uploads/transaction/${transactionId}`;
+      // folderPath =
+      //   `uploads/transaction/${transactionId}`;
 
-      await fs.promises.mkdir(folderPath, {
-        recursive: true,
-      });
+      // await fs.promises.mkdir(folderPath, {
+      //   recursive: true,
+      // });
 
-      const paymentProof =
-        await this.saveTransactionFile(
-          paymentProofFile,
-          transactionId,
-          'payment_proof',
-          folderPath,
-        );
+      // const paymentProof =
+      //   await this.saveTransactionFile(
+      //     paymentProofFile,
+      //     transactionId,
+      //     'payment_proof',
+      //     folderPath,
+      //   );
 
-      await this.transactionrepo.updateTransactionFile(
-        transactionId,
-        {
-          payment_proof_path:
-            paymentProof.dbPath,
-        },
-      );
+      // await this.transactionrepo.updateTransactionFile(
+      //   transactionId,
+      //   {
+      //     payment_proof_path:
+      //       paymentProof.dbPath,
+      //   },
+      // );
 
       return {
         success: true,
@@ -869,13 +1140,24 @@ export class TransactionsService {
           'Transaction completed successfully',
         transaction_id: transactionId,
       };
-    } catch (error) {
+    }
+
+    catch (error) {
       // cleanup files
-      if (folderPath && fs.existsSync(folderPath)) {
-        await fs.promises.rm(folderPath, {
-          recursive: true,
-          force: true,
-        });
+      // if (folderPath && fs.existsSync(folderPath)) {
+      //   await fs.promises.rm(folderPath, {
+      //     recursive: true,
+      //     force: true,
+      //   });
+      // }
+
+      for (const filePath of uploadedPaths) {
+
+        const finalPaths = path.resolve(filePath.replace(/^[/\\]+/, ''));
+
+        if (fs.existsSync(finalPaths)) {
+          await fs.promises.unlink(finalPaths);
+        }
       }
 
       Sentry.captureException(error);
@@ -883,6 +1165,44 @@ export class TransactionsService {
 
       throw error;
     }
+  }
+
+  async saveFile(
+    file: Express.Multer.File,
+    prefix: string,
+    folder: string
+  ): Promise<string | null> {
+
+    if (!file) return null;
+
+    const ext = path.extname(
+      file.originalname
+    );
+
+    // original name without extension
+    const baseName = path
+      .basename(file.originalname, ext)
+      .trim();
+
+    // sanitize filename
+
+    const safeName = baseName
+      .replace(/\s+/g, '_')        // spaces -> _
+      .replace(/[^a-zA-Z0-9_-]/g, ''); // remove special chars
+
+
+    const fileName =
+      `${prefix}_${safeName}_${uuidv4()}${ext}`;
+
+    const fullPath =
+      path.join(folder, fileName);
+
+    await fs.promises.writeFile(
+      fullPath,
+      file.buffer
+    );
+
+    return '/' + fullPath.replace(/\\/g, '/');
   }
 
 
@@ -995,32 +1315,32 @@ export class TransactionsService {
 
       const grouped = rows.reduce((acc, row) => {
 
-      const startDate = DateTime.fromJSDate(
-  new Date(row.loan_start_date),
-  { zone: 'Asia/Kolkata' }
-).startOf('day');
+        const startDate = DateTime.fromJSDate(
+          new Date(row.loan_start_date),
+          { zone: 'Asia/Kolkata' }
+        ).startOf('day');
 
-const now = DateTime.now()
-  .setZone('Asia/Kolkata')
-  .startOf('day');
+        const now = DateTime.now()
+          .setZone('Asia/Kolkata')
+          .startOf('day');
 
-const diff = now.diff(startDate, [
-  'years',
-  'months',
-  'days'
-]).toObject();
+        const diff = now.diff(startDate, [
+          'years',
+          'months',
+          'days'
+        ]).toObject();
 
-const years = Math.floor(diff.years || 0);
-const months = Math.floor(diff.months || 0);
-const days = Math.floor(diff.days || 0) + 1;
+        const years = Math.floor(diff.years || 0);
+        const months = Math.floor(diff.months || 0);
+        const days = Math.floor(diff.days || 0) + 1;
 
-const duration = [
-  years ? `${years} year${years > 1 ? 's' : ''}` : '',
-  months ? `${months} month${months > 1 ? 's' : ''}` : '',
-  days ? `${days} day${days > 1 ? 's' : ''}` : ''
-]
-.filter(Boolean)
-.join(' ');
+        const duration = [
+          years ? `${years} year${years > 1 ? 's' : ''}` : '',
+          months ? `${months} month${months > 1 ? 's' : ''}` : '',
+          days ? `${days} day${days > 1 ? 's' : ''}` : ''
+        ]
+          .filter(Boolean)
+          .join(' ');
 
         let loan = acc.find(
           (item) => item.loan_id === row.loan_id
@@ -1042,7 +1362,7 @@ const duration = [
               Number(row.principal_amount || 0)
               + Number(row.interest_amount || 0),
 
-                total_duration: duration,
+            total_duration: duration,
 
 
             loan_status: row.loan_status,

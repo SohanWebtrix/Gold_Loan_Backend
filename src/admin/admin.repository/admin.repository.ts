@@ -15,12 +15,13 @@ export class AdminRepository {
     constructor(private readonly db: DatabaseService) { }
 
   async insertBank(
-            data: any,userId:number
+            data: any,company_id:number,userId:number,
         ) {
             try {
     
                 const payload: any = {
                     ...data,
+                    company_id:company_id,
                     created_by: userId
                 };
     
@@ -462,6 +463,208 @@ export class AdminRepository {
             `;
 
             const rows = await this.db.query(sql);
+            return rows;
+        }
+        catch (error) {
+            console.error("findAll is", error)
+            throw error
+        }
+    }
+
+
+   async getTotalCountbank(company_id:number): Promise<number> {
+        try {
+            const sql = `SELECT COUNT(*) as total FROM bank_account where company_id=?`;
+            const result = await this.db.query(sql,[company_id]);
+            return result[0]?.total ?? 0;
+            
+        } catch (error) {
+
+            console.error("getTotalCount error is", error);
+            throw error;
+
+        }
+    }
+
+      async getFilteredCountbank(filters: any[],companyid:number): Promise<number> {
+        try {
+            const where: string[] = ['bk.company_id'];
+            const values: any[] = [companyid];
+
+            filters.forEach((f) => {
+                let value = f.value;
+
+                // EMPTY
+                if (f.operator === 'isEmpty') {
+                    where.push(`(${f.column} IS NULL OR ${f.column} = '')`);
+                    return;
+                }
+
+                // NOT EMPTY
+                if (f.operator === 'is_not_empty') {
+                    where.push(`(${f.column} IS NOT NULL AND ${f.column} != '')`);
+                    return;
+                }
+
+                // DATE
+                if (f.type === 'date') {
+                    const startOfDay = `${f.value} 00:00:00`;
+                    const endOfDay = `${f.value} 23:59:59`;
+
+                    if (f.operator === 'equals') {
+                        where.push(`(${f.column} BETWEEN ? AND ?)`);
+                        values.push(startOfDay, endOfDay);
+                        return;
+                    }
+
+                    if (f.operator === 'before') {
+                        where.push(`${f.column} < ?`);
+                        values.push(startOfDay);
+                        return;
+                    }
+
+                    if (f.operator === 'after') {
+                        where.push(`${f.column} > ?`);
+                        values.push(endOfDay);
+                        return;
+                    }
+
+                    if (f.operator === 'between') {
+                        const startDate = `${f.value} 00:00:00`;
+                        const endDate = `${f.valueTo} 23:59:59`;
+
+                        where.push(`(${f.column} BETWEEN ? AND ?)`);
+                        values.push(startDate, endDate);
+                        return;
+                    }
+                }
+
+                // LIKE
+                if (f.operator === 'contains') value = `%${value}%`;
+                if (f.operator === 'starts_with') value = `${value}%`;
+                if (f.operator === 'ends_with') value = `%${value}`;
+
+                if (f.type === 'number') value = Number(value);
+
+                where.push(`${f.column} ${OPERATOR_SQL[f.operator]} ?`);
+                values.push(value);
+
+            });
+
+            const sql = `
+              SELECT COUNT(*) as total
+              FROM bank_account bk
+              ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+            `;
+
+            const result = await this.db.query(sql, values);
+            return result[0]?.total ?? 0;
+        }
+        catch (error) {
+            console.error("getFilteredCount is", error)
+            throw error;
+        }
+    }
+
+    async findWithFiltersbank(filters: any[], page: number, limit: number,companyid:number) {
+        try {
+
+            const where: string[] = ['bk.company_id'];
+            const values: any[] = [companyid];
+
+            filters.forEach((f) => {
+                let value = f.value;
+
+                if (f.operator === 'isEmpty') {
+                    where.push(`(${f.column} IS NULL OR ${f.column} = '')`);
+                    return;
+                }
+
+                if (f.operator === 'is_not_empty') {
+                    where.push(`(${f.column} IS NOT NULL AND ${f.column} != '')`);
+                    return;
+                }
+
+                if (f.type === 'date') {
+                    const startOfDay = `${f.value} 00:00:00`;
+                    const endOfDay = `${f.value} 23:59:59`;
+
+                    if (f.operator === 'equals') {
+                        where.push(`(${f.column} BETWEEN ? AND ?)`);
+                        values.push(startOfDay, endOfDay);
+                        return;
+                    }
+
+                    if (f.operator === 'before') {
+                        where.push(`${f.column} < ?`);
+                        values.push(startOfDay);
+                        return;
+                    }
+
+                    if (f.operator === 'after') {
+                        where.push(`${f.column} > ?`);
+                        values.push(endOfDay);
+                        return;
+                    }
+
+                    if (f.operator === 'between') {
+                        const startDate = `${f.value} 00:00:00`;
+                        const endDate = `${f.valueTo} 23:59:59`;
+
+                        where.push(`(${f.column} BETWEEN ? AND ?)`);
+                        values.push(startDate, endDate);
+                        return;
+                    }
+                }
+
+                if (f.operator === 'contains') value = `%${value}%`;
+                if (f.operator === 'starts_with') value = `${value}%`;
+                if (f.operator === 'ends_with') value = `%${value}`;
+                if (f.type === 'number') value = Number(value);
+
+                where.push(`${f.column} ${OPERATOR_SQL[f.operator]} ?`);
+                values.push(value);
+            });
+
+            const safeLimit = Math.max(1, Number(limit));
+            const safeOffset = Math.max(0, Number((page - 1) * limit));
+
+            const sql = `
+                SELECT bk.*
+                FROM bank_account bk
+                ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+                ORDER BY bk.id DESC
+                LIMIT ${safeLimit} OFFSET ${safeOffset}
+              `;
+
+            const rows = await this.db.query(sql, values);
+            return rows;
+
+        }
+        catch (error) {
+            console.error("FindWithFilters error is", error)
+            throw error;
+        }
+    }
+
+    async findAllbank(page: number, limit: number,companyid:number) {
+        try {
+            const safeLimit = Number(limit);
+            const safeOffset = Number((page - 1) * limit);
+
+            if (isNaN(safeLimit) || isNaN(safeOffset)) {
+                throw new Error('Invalid pagination parameters');
+            }
+
+            const sql = `
+              SELECT bk.*
+              FROM bank_account bk
+              where company_id=?
+              ORDER BY bk.id DESC
+              LIMIT ${safeLimit} OFFSET ${safeOffset} 
+            `;
+
+            const rows = await this.db.query(sql,[companyid]);
             return rows;
         }
         catch (error) {

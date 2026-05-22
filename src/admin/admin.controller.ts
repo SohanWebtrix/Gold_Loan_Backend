@@ -70,11 +70,12 @@ export class AdminController {
 
          @Post('create_bank')
         @UseGuards(AuthGuard('jwt'))
-  async CreateBank(@Body() dto:any,@Req() req: any) {
+  async CreateBank(@Body() dto:any,@Req() req: any,@Headers('comp-id') companyId: string) {
 
     const userid = req.user.userId;
+    const companyIdNum = Number(companyId);
 
-    return this.adminService.CreateBank(dto,userid);
+    return this.adminService.CreateBank(dto,userid,companyIdNum);
 
   }
 
@@ -85,4 +86,24 @@ export class AdminController {
 
         return this.adminService.getBankById(id)
     }
+
+     @Post('listbank')
+    @UseGuards(AuthGuard('jwt'))
+    async getCustomers(
+        @Query('page') page = '1',
+        @Query('limit') limit = '10',
+        @Body('filters') filters: any[] = [],
+        @Headers('comp-id') companyId: string,
+    ) {
+
+        const companyIdNum = Number(companyId);
+
+        return this.adminService.getBankList(
+            Number(page),
+            Number(limit),
+            filters,
+            companyIdNum
+        );
+    }
+
 }

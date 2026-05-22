@@ -35,7 +35,7 @@ export class TransactionsController {
     @Post('create_transaction')
     @UseGuards(AuthGuard('jwt'))
     @UseInterceptors(FileFieldsInterceptor([
-        { name: 'payment_proof_file', maxCount: 1 }])
+        { name: 'payment_proof_file', maxCount: 20 }])
     )
     async CreateTransaction(@Body() dto: any,
         @Headers('comp-id') companyId: string,
@@ -45,13 +45,12 @@ export class TransactionsController {
             payment_proof_file?: Express.Multer.File[];
         },
     ) {
-        const paymentproof = files?.payment_proof_file?.[0];
         const companyIdNum = Number(companyId);
         const userId = req.user.userId;
 
         return this.transactionService.createTransaction(
             dto,
-            paymentproof,
+            files,
             userId,
             companyIdNum,
         );
