@@ -57,6 +57,7 @@ export class TransactionsService {
     filters: any[] = [],
     companyIdNum: number
   ) {
+    
     try {
 
       if (page < 1) page = 1;
@@ -567,7 +568,6 @@ export class TransactionsService {
 
           }
 
-
           else if (dto.transaction_type === 'Loan + Interest Amount Paid') {
 
             const loanBalanceAfter =
@@ -821,9 +821,7 @@ export class TransactionsService {
 
             // await this.transactionrepo.updateBankBalance(dto.account_type,accountBalanceAfter,conn)
           }
-
-
-
+          
           return insertId;
         });
 

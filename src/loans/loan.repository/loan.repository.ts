@@ -18,30 +18,33 @@ export class LoanRepository {
 
 
     async insertLoanDisbursementsBulk(
-  loanId: number,
-  companyid:number,
-  payments: any[],
-  conn: any
-) {
+        loanId: number,
+        companyid: number,
+        payments: any[],
+        conn: any
+    ) {
 
-  const values = payments.map(
-    item => [
-      loanId,
-      companyid,
-      item.account_type,
-      item.payment_type,
-      item.amount,
-      item.transaction_ref_no || null,
-      item.transaction_date || null,
-      item.note || null,
-      item.payment_proof_file || null
-    ]
-  );
+        try{
 
-  await conn.query(
-    `
+        const values = payments.map(
+            item => [
+                loanId,
+                companyid,
+                item.account_id,
+                item.payment_type,
+                item.amount,
+                item.transaction_reference_no || null,
+                item.transaction_date || null,
+                item.note || null,
+                item.payment_proof_file || null
+            ]
+        );
+
+        await conn.query(
+            `
     INSERT INTO loan_disbursements (
       loan_id,
+      company_id,
       account_id,
       payment_type,
       amount,
@@ -52,9 +55,16 @@ export class LoanRepository {
     )
     VALUES ?
     `,
-    [values]
-  );
-}
+            [values]
+        );
+    }
+    catch(error)
+    {
+
+        console.error("insert loan disbursement bulk error is",error);
+
+    }
+    }
 
 
     async updateBankBalance(accountid: number, account_balance: number, conn) {
@@ -264,6 +274,42 @@ export class LoanRepository {
                     data.total_amount,
                     data.last_interest_date,
                     data.loan_document_number,
+                    loanId,
+                ]
+            );
+
+        }
+
+        catch (error) {
+            Sentry.captureException(error);
+
+        }
+
+    }
+
+      async updateLoanInterestCorn(
+        loanId: number | null,
+        data: any,
+        conn: any,
+    ) {
+
+        try {
+            const db = conn ?? this.db;
+
+            return db.query(
+                `
+    UPDATE loans
+    SET
+
+      accrued_interest = ?,
+      total_amount=?,
+        last_interest_date = ?,
+    WHERE loan_id = ?
+    `,
+                [
+                    data.accrued_interest,
+                    data.total_amount,
+                    data.last_interest_date,
                     loanId,
                 ]
             );
@@ -1200,6 +1246,43 @@ WHERE loan_id = ?
     }
 
 
+    async getPaymentInfoByLoanId(loanId: number, conn?: any) {
+        const db = conn ?? this.db;
+
+        try {
+            const [rows] = await db.query(
+                'SELECT * FROM loan_disbursements WHERE loan_id = ?',
+                [loanId]
+            );
+            return rows;
+        }
+        catch (error) {
+            Sentry.captureException(error);
+
+            console.error("get payment info by id erros is", error)
+            throw error;
+        }
+    }
+
+    async deletePaymentInfo(id: number, conn?: any) {
+
+        const db = conn ?? this.db;
+
+        try {
+            const [rows] = await db.query(
+                'delete from loan_disbursements where id=?',
+                [id]
+            );
+
+            return rows;
+        }
+        catch (error) {
+            Sentry.captureException(error);
+
+            console.error("delete payment info by id erros is", error)
+            throw error;
+        }
+    }
 
 
     async getMortgage(loanId: number) {
@@ -1265,6 +1348,52 @@ WHERE m.loan_id = ?
         }
 
 
+    }
+
+
+    async deletePaymentInfoBulk(
+        ids: number[],
+        conn?: any,
+    ) {
+        const db = conn ?? this.db;
+
+        try {
+            if (!ids || ids.length === 0) {
+                return {
+                    affectedRows: 0,
+                };
+            }
+
+            // creates ?,?,? dynamically
+            const placeholders = ids
+                .map(() => '?')
+                .join(',');
+
+            const sql = `
+        DELETE FROM loan_disbursements
+        WHERE id IN (${placeholders})
+      `;
+
+            const [result] = await db.query(
+                sql,
+                ids,
+            );
+
+            return result;
+
+        } catch (error) {
+
+            Sentry.captureException(error);
+
+            console.error(
+                '❌ delete loan disbursement error:',
+                error,
+            );
+
+            throw new InternalServerErrorException(
+                'Failed to delete loan disbursements',
+            );
+        }
     }
 
 
@@ -1481,6 +1610,192 @@ WHERE m.loan_id = ?
     }
 
 
+    async updatePaymentInfo(
+        payid: number,
+        data: any,
+        conn?: any,
+    ) {
+        const db = conn ?? this.db;
+
+        try {
+
+            // clone object
+            const payload = { ...data };
+
+            // remove fields not needed in SQL
+            delete payload.id;
+            delete payload.proof_file_index;
+
+            // convert undefined => null
+            Object.keys(payload).forEach((key) => {
+                if (payload[key] === undefined) {
+                    payload[key] = null;
+                }
+            });
+
+            const fields: string[] = [];
+            const values: any[] = [];
+
+            Object.keys(payload).forEach((key) => {
+                fields.push(`${key} = ?`);
+                values.push(payload[key]);
+            });
+
+            if (!fields.length) {
+                return;
+            }
+
+            const sql = `
+        UPDATE loan_disbursements
+        SET ${fields.join(', ')}
+        WHERE id = ?
+      `;
+
+            values.push(payid);
+
+
+            const [result] = await db.query(
+                sql,
+                values,
+            );
+
+            return result;
+
+        } catch (error) {
+
+            Sentry.captureException(error);
+
+            console.error(
+                '❌ update payment info error:',
+                error,
+            );
+
+            throw new InternalServerErrorException(
+                'Failed to update payment info',
+            );
+        }
+    }
+
+    async insertPaymentInfo(
+        loanId: number,
+        companyId: number,
+        data: any,
+        conn?: any,
+    ) {
+        const db = conn ?? this.db;
+
+        try {
+
+            // clone incoming item
+            const payload: any = {
+                ...data,
+                loan_id: loanId,
+                company_id: companyId,
+            };
+
+            delete payload.proof_file_index;
+
+
+            // convert undefined => null
+            Object.keys(payload).forEach((key) => {
+                if (payload[key] === undefined) {
+                    payload[key] = null;
+                }
+            });
+
+            const columns = Object.keys(payload).join(', ');
+            const placeholders = Object.keys(payload)
+                .map(() => '?')
+                .join(', ');
+
+            const values = Object.values(payload);
+
+            const [result] = await db.query(
+                `
+        INSERT INTO loan_disbursements
+        (${columns})
+        VALUES (${placeholders})
+        `,
+                values,
+            );
+
+            return result;
+
+        } catch (error) {
+
+            Sentry.captureException(error);
+
+            console.error(
+                '❌ insertMortgageItem error:',
+                error,
+            );
+
+            throw new InternalServerErrorException(
+                'Failed to insert mortgage item',
+            );
+        }
+    }
+
+
+    async insertMortgageItem(
+        loanId: number,
+        data: any,
+        conn?: any,
+    ) {
+        const db = conn ?? this.db;
+
+        try {
+
+            // clone incoming item
+            const payload: any = {
+                ...data,
+                loan_id: loanId,
+            };
+
+            delete payload.gold_item_id;
+            delete payload.file_index;
+
+
+            // convert undefined => null
+            Object.keys(payload).forEach((key) => {
+                if (payload[key] === undefined) {
+                    payload[key] = null;
+                }
+            });
+
+            const columns = Object.keys(payload).join(', ');
+            const placeholders = Object.keys(payload)
+                .map(() => '?')
+                .join(', ');
+
+            const values = Object.values(payload);
+
+            const [result] = await db.query(
+                `
+        INSERT INTO mortgaged_items
+        (${columns})
+        VALUES (${placeholders})
+        `,
+                values,
+            );
+
+            return result;
+
+        } catch (error) {
+
+            Sentry.captureException(error);
+
+            console.error(
+                '❌ insertMortgageItem error:',
+                error,
+            );
+
+            throw new InternalServerErrorException(
+                'Failed to insert mortgage item',
+            );
+        }
+    }
+
     async updateMortgageItem(
         goldItemId: number,
         data: any,
@@ -1549,67 +1864,6 @@ WHERE m.loan_id = ?
     }
 
 
-
-    async insertMortgageItem(
-        loanId: number,
-        data: any,
-        conn?: any,
-    ) {
-        const db = conn ?? this.db;
-
-        try {
-
-            // clone incoming item
-            const payload: any = {
-                ...data,
-                loan_id: loanId,
-            };
-
-            delete payload.gold_item_id;
-            delete payload.file_index;
-
-
-            // convert undefined => null
-            Object.keys(payload).forEach((key) => {
-                if (payload[key] === undefined) {
-                    payload[key] = null;
-                }
-            });
-
-            const columns = Object.keys(payload).join(', ');
-            const placeholders = Object.keys(payload)
-                .map(() => '?')
-                .join(', ');
-
-            const values = Object.values(payload);
-
-            const [result] = await db.query(
-                `
-        INSERT INTO mortgaged_items
-        (${columns})
-        VALUES (${placeholders})
-        `,
-                values,
-            );
-
-            return result;
-
-        } catch (error) {
-
-            Sentry.captureException(error);
-
-            console.error(
-                '❌ insertMortgageItem error:',
-                error,
-            );
-
-            throw new InternalServerErrorException(
-                'Failed to insert mortgage item',
-            );
-        }
-    }
-
-
     async updateLoan(
         loan_id: number,
         dto: any,
@@ -1631,6 +1885,8 @@ WHERE m.loan_id = ?
             // ❗ remove flags (not DB columns)
             delete updateData.nominees;
             delete updateData.mortgaged_items;
+            delete updateData.payments;
+
 
 
             // remove undefined
@@ -1739,6 +1995,21 @@ LIMIT 1
                 [loanId]
             );
 
+            const paymentInfo =
+                await this.db.query(
+                    `
+    SELECT 
+      ld.*,
+      bk.account_type AS account_name
+    FROM loan_disbursements ld
+    LEFT JOIN bank_account bk
+      ON ld.account_id = bk.id
+    WHERE ld.loan_id = ?
+    ORDER BY ld.id ASC
+    `,
+    [loanId]
+                );
+
             const transaction = await this.db.query(
                 `
       SELECT *
@@ -1756,6 +2027,7 @@ LIMIT 1
                     loan,
                     nominees,
                     mortgaged_items: mortgagedItems,
+                    payments: paymentInfo,
                     transaction: transaction
                 },
             };

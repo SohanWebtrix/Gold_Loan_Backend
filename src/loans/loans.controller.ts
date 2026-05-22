@@ -16,7 +16,7 @@ export class LoansController {
     @UseInterceptors(
         FileFieldsInterceptor([ //basically for processing file on server
             { name: 'gold_item', maxCount: 20 },
-            { name: 'payment_proof_file', maxCount: 1 }
+            { name: 'payment_proof_file', maxCount: 20 }
         ]),
     )
     async CreateLoan(@Body('data') data: string,
@@ -33,11 +33,11 @@ export class LoansController {
         const companyIdNum = Number(companyId);
 
         const loanDto = JSON.parse(data);
-            
+
         const transactionFIle = files?.payment_proof_file?.[0];
 
         const userId = req.user.userId;
-
+            
         return this.loanServ.createLoan(
             loanDto,
             files,
@@ -46,7 +46,7 @@ export class LoansController {
             companyIdNum,
         );
     }
-
+    
 
     @Get('get_all_loans')
     @UseGuards(AuthGuard('jwt'))
@@ -102,7 +102,7 @@ export class LoansController {
     @UseInterceptors(
         FileFieldsInterceptor([
             { name: 'gold_item', maxCount: 20 },
-            { name: 'payment_proof_file', maxCount: 1 }
+            { name: 'payment_proof_file', maxCount: 20 }
         ]),
     )
     async updateLoan(

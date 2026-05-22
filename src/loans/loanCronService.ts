@@ -108,7 +108,7 @@ export class LoanCronService {
             return;
           }
 
-          await this.loanRepo.updateLoanInterest(
+          await this.loanRepo.updateLoanInterestCorn(
             loan.loan_id,
             {
               accrued_interest:

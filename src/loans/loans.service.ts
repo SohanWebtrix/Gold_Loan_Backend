@@ -535,18 +535,6 @@ export class LoansService {
 
       const nowIST = DateTime.now().setZone('Asia/Kolkata');
 
-      const transactionDateTime = DateTime
-        .fromISO(dto.transaction_date, {
-          zone: 'Asia/Kolkata'
-        })
-        .set({
-          hour: nowIST.hour,
-          minute: nowIST.minute,
-          second: nowIST.second,
-          millisecond: 0,
-        })
-        .toFormat('yyyy-MM-dd HH:mm:ss');
-
       if (!clientData) {
         throw new NotFoundException("Client not found");
       }
@@ -672,7 +660,6 @@ export class LoansService {
             uploadedPaths.push(imgPath);
           }
 
-          console.log("upload path for createLoan is", uploadedPaths);
 
           return {
             ...item,
@@ -682,11 +669,12 @@ export class LoansService {
       );
 
       const folderPathtransaction = `uploads/transaction/${dto.client_id}/${loanId}`;
+      await fs.promises.mkdir(folderPathtransaction, { recursive: true });
 
 
       const disbursementPayments = await Promise.all(
 
-        dto.payments.map(async (item, index) => {
+        (dto.payments ?? []).map(async (item, index) => {
 
           const file = files?.payment_proof_file?.[index];
 
@@ -708,7 +696,6 @@ export class LoansService {
             uploadedPaths.push(imgPath);
           }
 
-          console.log("upload path for createLoan is", uploadedPaths);
 
           return {
             ...item,
@@ -846,26 +833,77 @@ export class LoansService {
 
           const istNow = DateTime.now().setZone('Asia/Kolkata').toFormat('yyyy-MM-dd HH:mm:ss');
 
-          const accountBalance: any =
-            await this.loanRepo.getLatestAccountBalance(
-              dto.account_type,
+          let totalDisbursed = 0;
+          let latestTransactionDate: string | null = null;
+
+
+          for (const payment of disbursementPayments) {
+
+            const transactionDateTime = DateTime
+              .fromISO(payment.transaction_date, {
+                zone: 'Asia/Kolkata'
+              })
+              .set({
+                hour: nowIST.hour,
+                minute: nowIST.minute,
+                second: nowIST.second,
+                millisecond: 0,
+              })
+              .toFormat('yyyy-MM-dd HH:mm:ss');
+
+            latestTransactionDate = transactionDateTime;
+
+
+            const accountId =
+              Number(payment.account_id);
+
+            const paidAmount =
+              Number(payment.amount || 0);
+
+            totalDisbursed += paidAmount;
+
+            const accountBalance: any =
+              await this.loanRepo.getLatestAccountBalance(
+                accountId,
+                conn
+              );
+
+            if (paidAmount > accountBalance) {
+
+              throw new BadRequestException(
+                `Insufficient balance in account ${accountId}.
+       Available balance ₹${accountBalance}`
+              );
+            }
+
+            const accountBalanceAfter =
+              accountBalance - paidAmount;
+
+            // ACCOUNT LEDGER ENTRY
+            await this.loanRepo.insertLedger(
+              {
+                loan_id: loanId,
+                client_id: dto.client_id,
+                company_id: companyIdNum,
+                account_id: accountId,
+                credit: 0,
+                debit: paidAmount,
+                entry_type:
+                  "Disbursement Amount Paid",
+                remarks:
+                  "Paid from selected account",
+                balance_after:
+                  accountBalanceAfter,
+                status: "debit",
+                type: "account",
+                entry_date: istNow,
+                transaction_date:
+                  transactionDateTime,
+              },
               conn
             );
-
-          const loanAmount = Number(dto.principal_amount);
-
-          if (loanAmount > accountBalance) {
-
-            throw new BadRequestException(
-              `Insufficient balance. Available balance is ₹${accountBalance}`
-            );
-
           }
 
-          const accountBalanceAfter =
-            accountBalance - loanAmount;
-
-          // await this.loanRepo.updateBankBalance(dto.account_type,accountBalanceAfter,conn)
 
           const loanBalance: any =
             await this.loanRepo.getLatestLoanBalance(
@@ -874,44 +912,26 @@ export class LoansService {
             );
 
           const loanBalanceAfter =
-            loanBalance + loanAmount;
-
-
-          await this.loanRepo.insertLedger(
-            {
-              loan_id: loanId,
-              client_id: dto.client_id,
-              company_id: companyIdNum,
-              account_id: dto.account_type,
-              credit: 0,
-              debit: dto.principal_amount,
-              entry_type: "Disbursement Amount Paid",
-              remarks: "Paid from selected account",
-              balance_after: accountBalanceAfter,
-              status: "debit",
-              type: "account",
-              entry_date: istNow,
-              transaction_date: transactionDateTime,
-            },
-            conn
-          );
-
+            loanBalance + totalDisbursed;
 
           await this.loanRepo.insertLedger(
             {
               loan_id: loanId,
               client_id: dto.client_id,
               company_id: companyIdNum,
-              credit: dto.principal_amount,
-              balance_after: loanBalanceAfter,
+              credit: totalDisbursed,
               debit: 0,
-              entry_type: "Disbursement Amount Paid",
-              remarks: "Loan given to customer",
+              balance_after:
+                loanBalanceAfter,
+              entry_type:
+                "Disbursement Amount Paid",
+              remarks:
+                "Loan given to customer",
               status: "credit",
               type: "loan",
               entry_date: istNow,
-              transaction_date: transactionDateTime,
-
+              transaction_date:
+                latestTransactionDate,
             },
             conn
           );
@@ -968,6 +988,9 @@ export class LoansService {
     let newUploads: string[] = [];
     let oldFilesToDelete: string[] = [];
 
+    const nowIST = DateTime.now().setZone('Asia/Kolkata');
+
+
     try {
 
       dto.loan_status =
@@ -985,9 +1008,6 @@ export class LoansService {
           loanId
         );
 
-      console.log("loan is", loan)
-      console.log("loan client id is", loan.client_id)
-
       // ==========================================
       // STEP 2: Folder Path
       // ==========================================
@@ -997,7 +1017,6 @@ export class LoansService {
 
       const transaction_photo = await this.replaceClientFile(transactionfile, loanId, "transaction", folderPath1, loan.transaction_path, dto.remove_adhar)
 
-
       if (transaction_photo.filePath) {
         newUploads.push(transaction_photo.filePath);
       }
@@ -1006,14 +1025,11 @@ export class LoansService {
         oldFilesToDelete.push(transaction_photo.oldFileToDelete);
       }
 
-
       const fileUpdates: any = {};
-
 
       if (transaction_photo.dbPath !== undefined) {
         fileUpdates.payment_proof_file = transaction_photo.dbPath;
       }
-
 
       const folderPath =
         `uploads/gold/${userId}/${loan.client_id}/${loanId}`;
@@ -1053,7 +1069,6 @@ export class LoansService {
                 };
               }
 
-
               // no file sent
               if (
                 item.file_index === undefined ||
@@ -1089,6 +1104,78 @@ export class LoansService {
                 gold_item: fileName,
               };
 
+            }
+          )
+
+        );
+
+      const folderPath3 =
+        `uploads/transaction/${loan.client_id}/${loanId}`;
+
+      await fs.promises.mkdir(
+        folderPath3,
+        { recursive: true }
+      );
+
+      const preparedPayments =
+        await Promise.all(
+
+          (dto.payments ?? []).map(
+            async (item: any) => {
+
+              const removeProof =
+                item.remove_payment_proof === true ||
+                item.remove_payment_proof === 'true';
+
+              const hasFileIndex =
+                item.proof_file_index !== undefined &&
+                item.proof_file_index !== null &&
+                item.proof_file_index !== '';
+
+              // remove existing proof
+              
+              if (removeProof && !hasFileIndex) {
+                return {
+                  ...item,
+                  payment_proof_file: null,
+                };
+              }
+
+              // no new file uploaded -> preserve old file
+              if (!hasFileIndex) {
+                return item;
+              }
+
+
+              const file =
+                files?.payment_proof_file?.[
+                item.proof_file_index
+                ];
+
+              if (!file) {
+                return item;
+              }
+
+
+              const uploaded =
+                await this.saveClientFile(
+                  file,
+                  loanId,
+                  'transaction',
+                  folderPath3
+                );
+
+              if (uploaded?.filePath) {
+                newUploads.push(
+                  uploaded.filePath
+                );
+              }
+
+              return {
+                ...item,
+                payment_proof_file:
+                  uploaded?.dbPath || null,
+              };
             }
           )
         );
@@ -1143,6 +1230,7 @@ export class LoansService {
           // ----------------------------------
           // A. Update Loan Master
           // ----------------------------------
+
           await this.loanRepo.updateLoan(
             loanId,
             { ...dto, modified_date },
@@ -1181,13 +1269,26 @@ export class LoansService {
               conn
             );
 
-          oldFilesToDelete =
-            deletedOldFiles;
+
+          oldFilesToDelete.push(
+            ...deletedOldFiles
+          );
+
+          const deletedPaymentFiles =
+            await this.syncPaymentInfo(
+              loanId,
+              companyIdNum,
+              preparedPayments,
+              conn
+            );
+
+          oldFilesToDelete.push(
+            ...deletedPaymentFiles
+          );
+
 
 
           if (isFinalSave) {
-
-
 
             // interest generation
             const result =
@@ -1229,79 +1330,106 @@ export class LoansService {
                 'yyyy-MM-dd HH:mm:ss'
               );
 
-            const accountBalance: any =
-              await this.loanRepo
-                .getLatestAccountBalance(
-                  dto.account_type,
+
+            let totalDisbursed = 0;
+            let latestTransactionDate: string | null = null;
+
+
+            for (const payment of preparedPayments) {
+
+              const transactionDateTime = DateTime
+                .fromISO(payment.transaction_date, {
+                  zone: 'Asia/Kolkata'
+                })
+                .set({
+                  hour: nowIST.hour,
+                  minute: nowIST.minute,
+                  second: nowIST.second,
+                  millisecond: 0,
+                })
+                .toFormat('yyyy-MM-dd HH:mm:ss');
+
+              latestTransactionDate = transactionDateTime;
+
+
+              const accountId =
+                Number(payment.account_id);
+
+              const paidAmount =
+                Number(payment.amount || 0);
+
+              totalDisbursed += paidAmount;
+
+              const accountBalance: any =
+                await this.loanRepo.getLatestAccountBalance(
+                  accountId,
                   conn
                 );
 
-            const loanAmount =
-              Number(dto.principal_amount);
+              if (paidAmount > accountBalance) {
 
-            if (loanAmount > accountBalance) {
-              throw new BadRequestException(
-                `Insufficient balance. Available balance is ₹${accountBalance}`
+                throw new BadRequestException(
+                  `Insufficient balance in account ${accountId}.
+       Available balance ₹${accountBalance}`
+                );
+              }
+
+              const accountBalanceAfter =
+                accountBalance - paidAmount;
+
+              // ACCOUNT LEDGER ENTRY
+              await this.loanRepo.insertLedger(
+                {
+                  loan_id: loanId,
+                  client_id: dto.client_id,
+                  company_id: companyIdNum,
+                  account_id: accountId,
+                  credit: 0,
+                  debit: paidAmount,
+                  entry_type:
+                    "Disbursement Amount Paid",
+                  remarks:
+                    "Paid from selected account",
+                  balance_after:
+                    accountBalanceAfter,
+                  status: "debit",
+                  type: "account",
+                  entry_date: istNow,
+                  transaction_date:
+                    transactionDateTime,
+                },
+                conn
               );
             }
 
-            const accountBalanceAfter =
-              accountBalance - loanAmount;
 
             const loanBalance: any =
-              await this.loanRepo
-                .getLatestLoanBalance(
-                  loanId,
-                  conn
-                );
+              await this.loanRepo.getLatestLoanBalance(
+                loanId,
+                conn
+              );
 
             const loanBalanceAfter =
-              loanBalance + loanAmount;
+              loanBalance + totalDisbursed;
 
             await this.loanRepo.insertLedger(
               {
                 loan_id: loanId,
                 client_id: dto.client_id,
-                company_id: loan.compl_id,
-                account_id:
-                  dto.account_type,
-                credit: 0,
-                debit:
-                  dto.principal_amount,
-                entry_type:
-                  'Disbursement Amount Paid',
-                remarks:
-                  'Paid from selected account',
-                balance_after:
-                  accountBalanceAfter,
-                status: 'debit',
-                type: 'account',
-                entry_date: istNow,
-                transaction_date:
-                  dto.transaction_date,
-              },
-              conn
-            );
-
-            await this.loanRepo.insertLedger(
-              {
-                loan_id: loanId,
-                client_id: dto.client_id,
-                company_id: loan.compl_id,
-                credit:
-                  dto.principal_amount,
+                company_id: companyIdNum,
+                credit: totalDisbursed,
                 debit: 0,
                 balance_after:
                   loanBalanceAfter,
                 entry_type:
-                  'Disbursement Amount Paid',
+                  "Disbursement Amount Paid",
                 remarks:
-                  'Loan given to customer',
-                status: 'credit',
-                type: 'loan',
+                  "Loan given to customer",
+                status: "credit",
+                type: "loan",
                 entry_date: istNow,
                 transaction_date:
-                  dto.transaction_date,
+                  latestTransactionDate,
               },
               conn
             );
@@ -1416,6 +1544,162 @@ export class LoansService {
           );
       }
     }
+  }
+
+
+  async syncPaymentInfo(
+    loanId: number,
+    companyId: number,
+    payments: any[],
+    conn: any,
+  ): Promise<string[]> {
+
+    let oldFiles: string[] = [];
+
+    const dbRows =
+      await this.loanRepo
+        .getPaymentInfoByLoanId(
+          loanId,
+          conn
+        );
+
+    console.log(
+      "payment dbRows are",
+      dbRows
+    );
+
+    const dbIds =
+      dbRows.map(
+        x => x.id
+      );
+
+    console.log(
+      "payment dbIds are",
+      dbIds
+    );
+
+    const incomingIds =
+      payments
+        .filter(
+          x => x.id
+        )
+        .map(
+          x => x.id
+        );
+
+    console.log(
+      "incoming payment ids are",
+      incomingIds
+    );
+
+    // ========================
+    // DELETE Removed Rows
+    // ========================
+    const deleteRows =
+      dbRows.filter(
+        row =>
+          !incomingIds.includes(
+            row.id
+          )
+      );
+
+    console.log(
+      "deleted payment rows are",
+      deleteRows
+    );
+
+    if (deleteRows.length) {
+
+      await this.loanRepo
+        .deletePaymentInfoBulk(
+          deleteRows.map(
+            x => x.id
+          ),
+          conn
+        );
+
+      oldFiles.push(
+        ...deleteRows
+          .map(
+            x => x.payment_proof_file
+          )
+          .filter(Boolean)
+      );
+    }
+
+    // ========================
+    // UPDATE / INSERT
+    // ========================
+    for (const payment of payments) {
+
+      // UPDATE
+      if (
+        payment.id &&
+        payment.id != null
+      ) {
+
+        const old =
+          dbRows.find(
+            x =>
+              x.id ===
+              payment.id
+          );
+
+        if (
+          old?.payment_proof_file
+        ) {
+
+          // replaced file
+          if (
+            payment.payment_proof_file &&
+            old.payment_proof_file !==
+            payment.payment_proof_file
+          ) {
+
+            oldFiles.push(
+              old.payment_proof_file
+            );
+          }
+
+          // removed file
+          if (
+            payment.payment_proof_file ===
+            null
+          ) {
+
+            oldFiles.push(
+              old.payment_proof_file
+            );
+          }
+        }
+
+        await this.loanRepo
+          .updatePaymentInfo(
+            payment.id,
+            payment,
+            conn
+          );
+      }
+
+      // INSERT
+      else {
+
+        await this.loanRepo
+          .insertPaymentInfo(
+            loanId,
+            companyId,
+            payment,
+            conn
+          );
+      }
+    }
+
+    console.log(
+      "payment oldFiles are",
+      oldFiles
+    );
+
+    return oldFiles;
   }
 
   async syncMortgageItems(
