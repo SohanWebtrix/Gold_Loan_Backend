@@ -872,7 +872,7 @@ export class LoansService {
           for (const payment of disbursementPayments) {
 
             const transactionDateTime = DateTime
-              .fromISO(payment.transaction_date, {
+              .fromISO(dto.transaction_date, {
                 zone: 'Asia/Kolkata'
               })
               .set({
@@ -1370,7 +1370,7 @@ export class LoansService {
             for (const payment of preparedPayments) {
 
               const transactionDateTime = DateTime
-                .fromISO(payment.transaction_date, {
+                .fromISO(dto.transaction_date, {
                   zone: 'Asia/Kolkata'
                 })
                 .set({

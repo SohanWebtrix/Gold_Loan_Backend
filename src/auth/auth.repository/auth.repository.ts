@@ -34,7 +34,7 @@ export type LoginUserType = {
     comp_id: number;
     cust_phone: number;
     cust_email: string;
-    cust_name: string;
+    full_name: string;
     cust_password: string;
     status: string; // or 'active' | 'inactive' if you know values
     role: string;
@@ -549,7 +549,8 @@ export class AuthRepository {
 
         const rows = await this.db.query<LoginUserType[]>(
             `
-  SELECT customer_id,comp_id, cust_name, cust_email, cust_password,status,cust_phone,role,profile_pic_path
+  SELECT customer_id,comp_id,CONCAT(first_name, ' ', last_name) AS full_name
+, cust_email, cust_password,status,cust_phone,role,profile_pic_path
   FROM customers 
   WHERE (cust_phone = ? OR user_name = ?) 
   LIMIT 1
