@@ -34,6 +34,7 @@ export class CustomersController {
             profile_picture?: Express.Multer.File[];
         },
     ): Promise<any> {
+        
         const companyIdNum = Number(companyId);
         const userId = req.user.userId;
         const profileFile = files?.profile_picture?.[0];
@@ -59,8 +60,11 @@ export class CustomersController {
         },
     ): Promise<any> 
     {
+        
         const staffIdNum = Number(staffId);
+
         const userId = req.user.userId;
+
         const profileFile = files?.profile_picture?.[0];
 
         return await this.customerService.updateStaff(staffIdNum, dto, profileFile, userId);

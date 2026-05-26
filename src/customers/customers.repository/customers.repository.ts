@@ -157,7 +157,7 @@ GROUP BY c.customer_id;`, [customerId])
                 comp_id: companyId,
                 first_name: data.first_name,
                 last_name: data.last_name,
-                user_name: data.user_name,
+                user_name: data.user_name?.trim() || null,
                 cust_name,
                 role: data.role ?? 'staff',
                 status: data.status ?? 1,
@@ -220,6 +220,8 @@ GROUP BY c.customer_id;`, [customerId])
             const filteredPayload = Object.fromEntries(
                 Object.entries(payload).filter(([, value]) => value !== undefined),
             );
+
+            console.log("filtered payload is",filteredPayload);
 
             if (!Object.keys(filteredPayload).length) {
                 throw new Error('Nothing to update');
@@ -785,6 +787,7 @@ GROUP BY c.customer_id;`, [customerId])
     }
 
     async getTotalCountByid(userid: number): Promise<number> {
+
         try {
             const rows = await this.db.query<number>(
                 `
@@ -794,13 +797,13 @@ GROUP BY c.customer_id;`, [customerId])
               `,
                 [userid],
             );
+
             return rows[0].total;
 
         }
 
         catch (error) {
             Sentry.captureException(error);
-
 
             console.error("getTotalCount error is", error)
             throw error;

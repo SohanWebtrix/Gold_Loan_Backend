@@ -19,6 +19,7 @@ export class TransactionRepository {
       async insertTransactionPayment(
         loanId: number,
         companyid: number,
+        transactionid:number,
         payments: any[],
         conn: any
     ) {
@@ -29,6 +30,7 @@ export class TransactionRepository {
             item => [
                 loanId,
                 companyid,
+                transactionid,
                 item.account_id,
                 item.payment_type,
                 item.amount,
@@ -44,6 +46,7 @@ export class TransactionRepository {
     INSERT INTO transaction_payment (
       loan_id,
       company_id,
+      transaction_id,
       account_id,
       payment_type,
       amount,
@@ -1434,7 +1437,9 @@ SELECT
     cm.license_number,
   cm.note,
   cm.company_logo,
-  cm.address
+  cm.address,
+
+  tp.payment_type
 
 FROM loan_transactions t
 JOIN clients c ON t.client_id = c.cl_id
@@ -1442,6 +1447,8 @@ JOIN loans l ON t.loan_id = l.loan_id
 LEFT JOIN mortgaged_items m ON l.loan_id = m.loan_id
 LEFT JOIN company cm ON t.company_id = cm.company_id
 LEFT JOIN customers cust ON t.created_by = cust.customer_id
+LEFT JOIN transaction_payment tp
+  ON tp.transaction_id = t.transaction_id
 
 WHERE t.transaction_id = ?
 AND t.company_id = ?

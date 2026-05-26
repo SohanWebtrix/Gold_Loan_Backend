@@ -1,20 +1,119 @@
 /* eslint-disable prettier/prettier */
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, ConflictException, HttpException, Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
 import { AdminRepository } from './admin.repository/admin.repository';
 import { DateTime } from 'luxon';
 import { ADMIN_FILTER_SCHEMA } from './admin.filter.schema';
 import * as Sentry from '@sentry/node';
 import { BANK_FILTER_SCHEMA } from './bank.filter.schema';
+import * as bcrypt from 'bcrypt';
+import { DatabaseService } from 'src/database/database.service';
+import { MailService } from 'src/mail/mail.service';
+
+
 
 
 @Injectable()
 export class AdminService {
 
       constructor(
-            private readonly adminRepo: AdminRepository,
+            private readonly adminRepo: AdminRepository,private readonly db: DatabaseService,
+            private mailService: MailService,
+
         ) {
     
         }
+
+
+         async resetPassword(email: string, newPassword: string) {
+        
+                try {
+                    const rows = await this.adminRepo.getPassword(email);
+        
+        
+                    if (!rows) {
+                        throw new BadRequestException('Email does not exists');
+                    }
+        
+        
+                    // 3️⃣ Hash password
+                    const hash = await bcrypt.hash(newPassword, 10);
+        
+        
+                    const updatePassword = await this.adminRepo.updatePass(hash, email);
+        
+                    if (!updatePassword || updatePassword.affectedRows === 0) {
+                        throw new BadRequestException("Email does not exists")
+                    }
+        
+                    if (updatePassword.affectedRows === 1) {
+                        return {
+                            message: "password updated succesfully",
+                            status: true,
+                        }
+                    }
+        
+                    return {
+                        message: 'Fail to reset password',
+                    };
+                }
+                catch (error) {
+                    console.error("reset passwrod error is", error);
+                    throw error;
+                }
+            }
+
+           async forgotPassword(email: string) {
+                try {
+
+                    const useremail = await this.adminRepo.findemail(email);
+        
+                    if (!useremail) {
+                        throw new UnauthorizedException('Email not found');
+                    }
+        
+                    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        
+                    const hash = await bcrypt.hash(otp, 10);
+        
+                    const expiry = new Date(Date.now() + 5 * 60 * 1000);
+        
+                    // DB transaction only
+                    const rows = await this.db.transaction(async (conn) => {
+                        return await this.adminRepo.insertOtp(
+                            conn,
+                            email,
+                            hash,
+                            expiry,
+                        );
+                    });
+        
+                    console.log("rows are", rows);
+        
+                    if (!rows || rows.affectedRows !== 1) {
+                        throw new InternalServerErrorException(
+                            'Failed to save OTP',
+                        );
+                    }
+        
+                    // Send mail AFTER commit
+                    await this.mailService.sendOTP(email, otp);
+        
+                    return {
+                        success: true,
+                        message: 'OTP sent successfully',
+                    };
+        
+                } catch (error) {
+                    if (error instanceof HttpException) {
+                        throw error;
+                    }
+        
+                    throw new InternalServerErrorException(
+                        'Failed to send OTP email. Please try again.',
+                    );
+                }
+            }
+
 
 
           async getBankList(
@@ -239,6 +338,23 @@ export class AdminService {
             catch (error) {
 
                 console.error("CreateAdmin error", error)
+
+                    if (error.code === "ER_DUP_ENTRY") {
+                
+                        const msg = error.sqlMessage;
+                
+                        if (msg.includes("unique_admin_email")) {
+                          throw new ConflictException("Email ID already exists");
+                        }
+                
+                                  if (msg.includes("unique_user_name")) {
+                          throw new ConflictException("Username already exists");
+                        }
+                
+                
+                        throw new ConflictException("Duplicate value detected");
+                      }
+
                 throw error;
 
             } 

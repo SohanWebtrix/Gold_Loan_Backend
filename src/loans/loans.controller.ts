@@ -62,9 +62,11 @@ export class LoansController {
 
     @Get('get_bank_account')
 
-    async getAllBanks() {
+    async getAllBanks(@Headers('comp-id') companyId: string,) {
 
-        return this.loanServ.getAllAccount()
+                const companyIdNum = Number(companyId);
+
+        return this.loanServ.getAllAccount(companyIdNum)
 
     }
 

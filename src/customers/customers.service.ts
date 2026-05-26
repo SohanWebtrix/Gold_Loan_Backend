@@ -396,8 +396,13 @@ export class CustomersService {
         throw new BadRequestException('Staff not found');
       }
 
+      console.log("existing staff is",existingStaff);
+
       const folderPath = `uploads/staff/${staffId}`;
       await fs.promises.mkdir(folderPath, { recursive: true });
+
+          console.log("dto in update staff is",dto)
+
 
       const profile = await this.replaceStaffFile(
         profileFile,
@@ -405,11 +410,15 @@ export class CustomersService {
         'profile',
         folderPath,
         existingStaff.profile_pic_path,
-        dto.remove_profile,
+          dto.remove_profile === 'true',
       );
 
+      console.log("profile inside customer service is",profile);
+
       if (profile.filePath) {
+
         uploadedFiles.push(profile.filePath);
+
       }
       if (profile.oldFileToDelete) {
         oldFilesToDelete.push(profile.oldFileToDelete);
@@ -421,9 +430,13 @@ export class CustomersService {
       }
 
       const payload = { ...dto, ...fileUpdates };
+
       delete payload.remove_profile;
 
 payload.cust_email = payload.cust_email?.trim() || null;
+payload.user_name = payload.user_name?.trim() || null;
+
+console.log("user name is",payload.user_name);
 
       const result = await this.customerRepo.updateStaff(staffId, payload, userId);
 
@@ -470,9 +483,16 @@ payload.cust_email = payload.cust_email?.trim() || null;
     oldFilePath?: string,
     removeFile?: boolean,
   ): Promise<{ dbPath?: string | null; filePath?: string | null; oldFileToDelete?: string | null }> {
+
+    console.log("rmeove file in replace staff file is",removeFile);
+
     if (removeFile) {
+      console.log("inside remove file in replaceStaffFile");
+
       return { dbPath: null, oldFileToDelete: oldFilePath ?? null };
     }
+
+    console.log("folder path inside replace staff file is",folderPath);
 
     if (!file) {
       return {};
@@ -488,6 +508,9 @@ payload.cust_email = payload.cust_email?.trim() || null;
     const fileName = `${prefix}_${staffId}_${uuidv4()}${ext}`;
     const filePath = path.join(folderPath, fileName);
     const dbPath = `/${folderPath}/${fileName}`;
+
+    console.log("dbPath is in replaceStaff is",dbPath);
+    console.log("file path is",filePath);
 
     await fs.promises.writeFile(filePath, file.buffer);
 

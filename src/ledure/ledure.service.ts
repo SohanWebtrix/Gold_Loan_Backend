@@ -12,7 +12,7 @@ export class LedureService {
 
   }
 
-  async getLedureList(
+  async   getLedureList(
     page: number,
     limit: number,
     filters: any[] = [],

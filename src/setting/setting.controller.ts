@@ -69,9 +69,11 @@ export class SettingController {
     @Param('customer_id') customerId: string,
     @Headers('comp-id') compIdHeader: string,
   ) {
+
     const customerIdNumber = Number(customerId);
     const compIdNumber = compIdHeader ? Number(compIdHeader) : undefined;
     return this.settingservice.getCustomerDetails(customerIdNumber, compIdNumber);
+    
   }
 
   @Get('get_company')

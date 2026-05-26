@@ -148,7 +148,7 @@ export class TransactionsService {
 
       const nowIST = DateTime.now()
         .setZone('Asia/Kolkata');
-
+ 
       const transactionDateTime = DateTime
         .fromISO(dto.transaction_date, {
           zone: 'Asia/Kolkata'
@@ -360,7 +360,6 @@ export class TransactionsService {
           overdueBalance;
       }
 
-      console.log("total balance is", totalBalance);
 
       let loanStatus = 'active';
 
@@ -447,16 +446,7 @@ export class TransactionsService {
         await this.db.transaction(async (conn) => {
           dto.receipt_no = await this.transactionrepo.generateNumber(companyId, "TRANSACTION", conn);
 
-          if (disbursementPayments?.length) {
-
-            await this.transactionrepo
-              .insertTransactionPayment(
-                dto.loan_id,
-                companyId,
-                disbursementPayments,
-                conn
-              );
-          }
+      
 
           const insertResult =
             await this.transactionrepo.insertTransaction(
@@ -493,6 +483,19 @@ export class TransactionsService {
 
           const insertId =
             insertResult.insertId;
+
+
+                if (disbursementPayments?.length) {
+
+            await this.transactionrepo
+              .insertTransactionPayment(
+                dto.loan_id,
+                companyId,
+                insertId,
+                disbursementPayments,
+                conn
+              );
+          }
 
           if (
             interestPaid > 0 &&
@@ -579,7 +582,6 @@ export class TransactionsService {
               conn
             );
 
-
           const latestAccountBalance: any =
             await this.transactionrepo.getLatestAccountBalance(
               dto.account_type,
@@ -589,81 +591,28 @@ export class TransactionsService {
           const latestInterestBalance =
             await this.transactionrepo.getLatestInterestBalance(dto.loan_id, conn);
 
-
           if (dto.transaction_type === 'TOPUP') {
 
-            let totalTopup = 0;
+           const totalTopup =
+  disbursementPayments.reduce(
+    (sum, payment) =>
+      sum + Number(payment.amount || 0),
+    0
+  );
 
-            for (const payment of disbursementPayments) {
-
-              const accountId =
-                Number(payment.account_id);
-
-              const paidAmount =
-                Number(payment.amount || 0);
-
-              totalTopup += paidAmount;
-
-              const latestAccountBalance: any =
-                await this.transactionrepo
-                  .getLatestAccountBalance(
-                    accountId,
-                    conn
-                  );
-
-              if (
-                paidAmount >
-                latestAccountBalance
-              ) {
-                throw new BadRequestException(
-                  `Insufficient balance in account ${accountId}`
-                );
-              }
-
-              const accountBalanceAfter =
-                latestAccountBalance -
-                paidAmount;
-
-              await this.transactionrepo.updateBankBalance(payment.account_id, accountBalanceAfter, conn)
-
-
-              // ACCOUNT ENTRY
-              await this.transactionrepo
-                .insertLedger(
-                  {
-                    transaction_id: insertId,
-                    loan_id: dto.loan_id,
-                    client_id:
-                      loan.client_id,
-                    company_id:
-                      companyId,
-
-                    account_id:
-                      accountId,
-
-                    debit:
-                      paidAmount,
-                    credit: 0,
-
-                    entry_type:
-                      dto.transaction_type,
-
-                    balance_after:
-                      accountBalanceAfter,
-
-                    status: "debit",
-                    type: "account",
-
-                    entry_date:
-                      istNow,
-
-                    transaction_date:
-                      transactionDateTime,
-                  },
-                  conn
-                );
-            }
-
+await this.createMultipleAccountEntries(
+  disbursementPayments,
+  insertId,
+  loan,
+  dto,
+  companyId,
+  istNow,
+  transactionDateTime,
+  conn,
+  {
+    type: 'debit'
+  }
+);
             // SINGLE LOAN ENTRY
             const loanBalanceAfter =
               latestLoanBalance +
@@ -807,77 +756,19 @@ export class TransactionsService {
                 conn
               );
 
-            let totalReceived = 0;
-
-            for (const payment of disbursementPayments) {
-
-              const accountId =
-                Number(payment.account_id);
-
-              const paidAmount =
-                Number(payment.amount || 0);
-
-              totalReceived +=
-                paidAmount;
-
-              const latestAccountBalance: any =
-                await this.transactionrepo
-                  .getLatestAccountBalance(
-                    accountId,
-                    conn
-                  );
-
-              const accountBalanceAfter =
-                latestAccountBalance +
-                paidAmount;
-
-              await this.transactionrepo.updateBankBalance(payment.account_id, accountBalanceAfter, conn)
-
-
-              // MULTIPLE ACCOUNT CREDIT
-              await this.transactionrepo
-                .insertLedger(
-                  {
-                    transaction_id:
-                      insertId,
-
-                    loan_id:
-                      dto.loan_id,
-
-                    client_id:
-                      loan.client_id,
-
-                    company_id:
-                      companyId,
-
-                    account_id:
-                      accountId,
-
-                    debit: 0,
-                    credit:
-                      paidAmount,
-
-                    entry_type:
-                      dto.transaction_type,
-
-                    balance_after:
-                      accountBalanceAfter,
-
-                    status:
-                      "credit",
-
-                    type:
-                      "account",
-
-                    entry_date:
-                      istNow,
-
-                    transaction_date:
-                      transactionDateTime,
-                  },
-                  conn
-                );
-            }
+          await this.createMultipleAccountEntries(
+  disbursementPayments,
+  insertId,
+  loan,
+  dto,
+  companyId,
+  istNow,
+  transactionDateTime,
+  conn,
+   {
+    type: 'credit'
+  }
+);
 
 
           }
@@ -914,76 +805,19 @@ export class TransactionsService {
               conn
             );
 
-            let totalReceived = 0;
-
-            for (const payment of disbursementPayments) {
-
-              const accountId =
-                Number(payment.account_id);
-
-              const paidAmount =
-                Number(payment.amount || 0);
-
-              totalReceived +=
-                paidAmount;
-
-              const latestAccountBalance: any =
-                await this.transactionrepo
-                  .getLatestAccountBalance(
-                    accountId,
-                    conn
-                  );
-
-              const accountBalanceAfter =
-                latestAccountBalance +
-                paidAmount;
-
-              await this.transactionrepo.updateBankBalance(payment.account_id, accountBalanceAfter, conn)
-
-              // MULTIPLE ACCOUNT CREDIT
-              await this.transactionrepo
-                .insertLedger(
-                  {
-                    transaction_id:
-                      insertId,
-
-                    loan_id:
-                      dto.loan_id,
-
-                    client_id:
-                      loan.client_id,
-
-                    company_id:
-                      companyId,
-
-                    account_id:
-                      accountId,
-
-                    debit: 0,
-                    credit:
-                      paidAmount,
-
-                    entry_type:
-                      dto.transaction_type,
-
-                    balance_after:
-                      accountBalanceAfter,
-
-                    status:
-                      "credit",
-
-                    type:
-                      "account",
-
-                    entry_date:
-                      istNow,
-
-                    transaction_date:
-                      transactionDateTime,
-                  },
-                  conn
-                );
-            }
+          await this.createMultipleAccountEntries(
+  disbursementPayments,
+  insertId,
+  loan,
+  dto,
+  companyId,
+  istNow,
+  transactionDateTime,
+  conn,
+   {
+    type: 'credit'
+  }
+);
 
             // await this.transactionrepo.updateBankBalance(dto.account_type,accountBalanceAfter,conn)
 
@@ -994,8 +828,7 @@ export class TransactionsService {
             const loanBalanceAfter =
               latestLoanBalance - principalPaid;
 
-            const accountBalanceAfter =
-              latestAccountBalance + principalPaid;
+           
 
             await this.transactionrepo.insertLedger(
               {
@@ -1020,76 +853,19 @@ export class TransactionsService {
             // Ledger Entry 2
             // CR Selected Account
             // -------------------------------------
-            let totalReceived = 0;
-
-            for (const payment of disbursementPayments) {
-
-              const accountId =
-                Number(payment.account_id);
-
-              const paidAmount =
-                Number(payment.amount || 0);
-
-              totalReceived +=
-                paidAmount;
-
-              const latestAccountBalance: any =
-                await this.transactionrepo
-                  .getLatestAccountBalance(
-                    accountId,
-                    conn
-                  );
-
-              const accountBalanceAfter =
-                latestAccountBalance +
-                paidAmount;
-
-              await this.transactionrepo.updateBankBalance(payment.account_id, accountBalanceAfter, conn)
-
-              // MULTIPLE ACCOUNT CREDIT
-              await this.transactionrepo
-                .insertLedger(
-                  {
-                    transaction_id:
-                      insertId,
-
-                    loan_id:
-                      dto.loan_id,
-
-                    client_id:
-                      loan.client_id,
-
-                    company_id:
-                      companyId,
-
-                    account_id:
-                      accountId,
-
-                    debit: 0,
-                    credit:
-                      paidAmount,
-
-                    entry_type:
-                      dto.transaction_type,
-
-                    balance_after:
-                      accountBalanceAfter,
-
-                    status:
-                      "credit",
-
-                    type:
-                      "account",
-
-                    entry_date:
-                      istNow,
-
-                    transaction_date:
-                      transactionDateTime,
-                  },
-                  conn
-                );
-            }
+          await this.createMultipleAccountEntries(
+  disbursementPayments,
+  insertId,
+  loan,
+  dto,
+  companyId,
+  istNow,
+  transactionDateTime,
+  conn,
+   {
+    type: 'credit'
+  }
+);
 
             // await this.transactionrepo.updateBankBalance(dto.account_type,accountBalanceAfter,conn)
 
@@ -1166,6 +942,118 @@ export class TransactionsService {
       throw error;
     }
   }
+
+
+
+
+ private async createMultipleAccountEntries(
+  payments: any[],
+  insertId: number,
+  loan: any,
+  dto: any,
+  companyId: number,
+  istNow: string,
+  transactionDateTime: string,
+  conn: any,
+  options: {
+    type: 'credit' | 'debit';
+  }
+) {
+
+  for (const payment of payments) {
+
+    const accountId =
+      Number(payment.account_id);
+
+    const paidAmount =
+      Number(payment.amount || 0);
+
+    const latestAccountBalance: any =
+      await this.transactionrepo
+        .getLatestAccountBalance(
+          accountId,
+          conn
+        );
+
+    let accountBalanceAfter = 0;
+    let debit = 0;
+    let credit = 0;
+
+    if (options.type === 'credit') {
+
+      accountBalanceAfter =
+        latestAccountBalance +
+        paidAmount;
+
+      credit = paidAmount;
+
+    } else {
+
+      // debit case (TOPUP)
+      if (paidAmount > latestAccountBalance) {
+
+        throw new BadRequestException(
+          `Insufficient balance in account ${accountId}`
+        );
+      }
+
+      accountBalanceAfter =
+        latestAccountBalance -
+        paidAmount;
+
+      debit = paidAmount;
+    }
+
+    await this.transactionrepo
+      .updateBankBalance(
+        accountId,
+        accountBalanceAfter,
+        conn
+      );
+
+    await this.transactionrepo
+      .insertLedger(
+        {
+          transaction_id:
+            insertId,
+
+          loan_id:
+            dto.loan_id,
+
+          client_id:
+            loan.client_id,
+
+          company_id:
+            companyId,
+
+          account_id:
+            accountId,
+
+          debit,
+          credit,
+
+          entry_type:
+            dto.transaction_type,
+
+          balance_after:
+            accountBalanceAfter,
+
+          status:
+            options.type,
+
+          type:
+            "account",
+
+          entry_date:
+            istNow,
+
+          transaction_date:
+            transactionDateTime,
+        },
+        conn
+      );
+  }
+}
 
   async saveFile(
     file: Express.Multer.File,
@@ -1468,6 +1356,8 @@ export class TransactionsService {
             company_logo: row.company_logo,
             company_address: row.address,
             // mortgaged_items: []
+              payment_types: [] // add this
+
           };
 
           if (row.transaction_type === "INTEREST_ONLY") {
@@ -1482,6 +1372,7 @@ export class TransactionsService {
             receipt.principal_paid = row.principal_paid;
             receipt.interest_paid = row.interest_paid;
           }
+
 
           acc.push(receipt);
 
@@ -1498,6 +1389,16 @@ export class TransactionsService {
         //     total_weight: row.total_weight
         //   });
         // }
+
+
+          // <-- MOVE THIS OUTSIDE if (!receipt)
+  if (
+    row.payment_type &&
+    !receipt.payment_types.includes(row.payment_type)
+  ) {
+    
+    receipt.payment_types.push(row.payment_type);
+  }
 
         return acc;
       }, []);

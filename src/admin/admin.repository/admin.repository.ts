@@ -8,11 +8,80 @@ import { ConflictException, Injectable, InternalServerErrorException } from "@ne
 import { OPERATOR_SQL } from "src/filter/operator.map";
 import * as Sentry from '@sentry/node';
 
+type Admin = {
+    admin_id : number;
+    password: string;
+};
+
+type AdminId = {
+    admin_id: number;
+};
+
 
 @Injectable()
 export class AdminRepository {
 
     constructor(private readonly db: DatabaseService) { }
+
+
+        async updatePass(hash: string, email: string) {
+        try {
+            const rows = await this.db.query<ResultSetHeader>(`UPDATE admins SET admin_password = ? WHERE admin_email  = ?`,
+                [hash, email],)
+
+            return rows;
+        } catch (error) {
+            console.error("updatePass error is", error)
+        }
+    }
+
+
+      async getPassword(email: string): Promise<Admin | null> {
+        try {
+            const rows = await this.db.query<Admin[]>('SELECT admin_id, admin_password FROM admins WHERE admin_email  = ? limit 1', [email])
+            return rows[0] || null;
+        } catch (error) {
+            console.error("get Password error is", error);
+            throw error;
+        }
+    }
+
+      async insertOtp(conn: any, email: string, hash: string, expiry: Date) {
+
+        try {
+            const db = conn ?? this.db;
+            const [result] = await db.query(
+                `
+     INSERT INTO otp_login
+    (
+      email,
+      otp_hash,
+      expires_at,
+      purpose
+    )
+    VALUES (?, ?, ?, ?)
+    `,
+                [
+                    email,
+                    hash,
+                    expiry,
+                    'RESET_PASSWORD'
+                ],
+            );
+
+            return result;
+
+        }
+        catch (error) {
+            // Sentry.captureException(error);
+
+            console.error("Fail to insert otp", error)
+
+            throw new InternalServerErrorException(
+                "Failed to insert otp"
+            );
+        }
+    }
 
   async insertBank(
             data: any,company_id:number,userId:number,
@@ -55,7 +124,28 @@ export class AdminRepository {
                 );
             }
         }
-    
+     async findemail(email: string): Promise<AdminId | null> {
+
+        try {
+
+            const rows = await this.db.query<AdminId[]>(
+                `
+  SELECT admin_id
+  FROM admins 
+  WHERE admin_email  = ?
+  LIMIT 1
+  `,
+                [email]
+            );
+
+            return rows[0] || null;
+
+        }
+        catch (error) {
+            console.error("findemail error is", error)
+            throw error;
+        }
+    }
         async getFilteredCountSearch(search: string, userid: number): Promise<number> {
                 try {
                     const rows = await this.db.query<number>(
@@ -649,6 +739,7 @@ export class AdminRepository {
 
     async findAllbank(page: number, limit: number,companyid:number) {
         try {
+            
             const safeLimit = Number(limit);
             const safeOffset = Number((page - 1) * limit);
 

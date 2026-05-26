@@ -376,7 +376,7 @@ private async replaceCompanyFile(
             'profile',
             folderPath,
             existingStaff.profile_pic_path,
-            dto.remove_profile,
+            dto.remove_profile === 'true',
           );
     
           if (profile.filePath) {

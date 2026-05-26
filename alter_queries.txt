@@ -103,3 +103,101 @@ ALTER TABLE bank_account
 ADD CONSTRAINT fk_bank_account_modified_by_customer
 FOREIGN KEY (modified_by)
 REFERENCES customers(customer_id);
+
+13-
+
+alter TABLE company add COLUMN license_number varchar(255);
+
+Next updated querys===========================================================================================================================================================================================================================
+
+
+14 subscription table 
+
+CREATE TABLE subscription_table (
+    sub_id INT AUTO_INCREMENT PRIMARY KEY,
+    
+    customer_id INT NOT NULL,
+    company_id INT NOT NULL,
+    
+    transaction_date DATETIME NOT NULL,
+    subscription_start_date DATE NOT NULL,
+    subscription_end_date DATE NOT NULL,
+    
+    transaction_id VARCHAR(255) DEFAULT NULL,
+    _subscription_note TEXT DEFAULT NULL,
+    
+    created_by INT NOT NULL,
+    created_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    
+    modified_by INT DEFAULT NULL,
+    modified_date DATETIME DEFAULT NULL,
+
+    -- Foreign Keys
+    CONSTRAINT fk_customer_subscription_customer
+        FOREIGN KEY (customer_id)
+        REFERENCES customers(customer_id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+
+    CONSTRAINT fk_customer_subscription_company
+        FOREIGN KEY (company_id)
+        REFERENCES company(company_id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+
+    CONSTRAINT fk_customer_subscription_created_by
+        FOREIGN KEY (created_by)
+        REFERENCES admins(admin_id)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE,
+
+    CONSTRAINT fk_customer_subscription_modified_by
+        FOREIGN KEY (modified_by)
+        REFERENCES admins(admin_id)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE
+);
+
+15- 
+
+ALTER TABLE customers 
+ADD COLUMN subscription_end_date DATETIME;
+
+16 -
+
+alter TABLE company add COLUMN company_logo varchar(255);
+alter TABLE company add COLUMN note varchar(500);
+
+17-
+
+
+ALTER TABLE admins
+    ADD CONSTRAINT unique_admin_email UNIQUE (admin_email),
+    ADD CONSTRAINT unique_user_name UNIQUE (user_name);
+
+18-
+
+    alter table subscription_table add column subscription_type varchar (100);
+
+
+19-
+
+ALTER TABLE bank_account
+MODIFY bank_name VARCHAR(100) NULL DEFAULT NULL,
+MODIFY account_no VARCHAR(50) NULL DEFAULT NULL,
+MODIFY ifsc_code VARCHAR(20) NULL DEFAULT NULL,
+MODIFY branch_name VARCHAR(100) NULL DEFAULT NULL;
+
+20-
+
+alter table company add column receipt_note_title TEXT;
+
+21-
+
+ALTER TABLE transaction_payment
+ADD COLUMN transaction_id BIGINT;
+
+ALTER TABLE transaction_payment
+ADD CONSTRAINT fk_transaction_payment_transaction_id
+FOREIGN KEY (transaction_id)
+REFERENCES loan_transactions(transaction_id);

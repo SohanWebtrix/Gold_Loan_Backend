@@ -45,10 +45,14 @@ export class TransactionsController {
             payment_proof_file?: Express.Multer.File[];
         },
     ) {
+
         const companyIdNum = Number(companyId);
+
         const userId = req.user.userId;
 
-        return this.transactionService.createTransaction(
+        return this.transactionService.createTransaction
+        
+        (
             dto,
             files,
             userId,
@@ -114,7 +118,6 @@ async getClientLoans(
         @Param("transactionId") transctionId: string,
         @Headers("comp-id") companyId: string
     ) {
-        
         
         return this.transactionService.getReceipt(
             Number(transctionId),

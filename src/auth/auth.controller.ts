@@ -42,7 +42,9 @@ export class AuthController {
   ) {
 
     const customerIdNumber = Number(customerId);
+
     const compIdNumber = compIdHeader ? Number(compIdHeader) : undefined;
+
     return this.authService.getCustomerDetails(customerIdNumber, compIdNumber);
 
   }

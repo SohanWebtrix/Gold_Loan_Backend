@@ -20,6 +20,7 @@ export class LoanRepository {
     async insertLoanDisbursementsBulk(
         loanId: number,
         companyid: number,
+        transactiondate:any,
         payments: any[],
         conn: any
     ) {
@@ -34,7 +35,7 @@ export class LoanRepository {
                 item.payment_type,
                 item.amount,
                 item.transaction_reference_no || null,
-                item.transaction_date || null,
+                transactiondate || null,
                 item.note || null,
                 item.payment_proof_file || null
             ]
@@ -1153,6 +1154,8 @@ SELECT
   c.caste,
   c.mobile_no,
   c.client_code,
+  c.profile_pic_path,
+  c.street_add1,
   c.email,
   c.dob,
   c.gender,
@@ -1308,8 +1311,8 @@ SELECT
   cm.company_name,
   cm.license_number,
   cm.note,
+  cm.receipt_note_title,
   cm.company_logo,
-  cm.note,
   cm.address,
   CONCAT_WS(' ', cust.first_name, cust.last_name) AS created_by_name,
   CONCAT(
@@ -2076,13 +2079,14 @@ LIMIT 1
 
 
 
-    async getallbanks() {
+    async getallbanks(company_id:number) {
+
         try {
             const rows = await this.db.query(
-                `SELECT 
+                `SELECT
                 id,account_type,bank_name
-             FROM bank_account 
-             `,
+             FROM bank_account where company_id=?
+             `,[company_id]
             );
 
             return rows;

@@ -39,7 +39,7 @@ export type LoginUserType = {
     status: string; // or 'active' | 'inactive' if you know values
     role: string;
     profile_pic_path: string;
-
+    subscription_end_date: Date;
 };
 
 export type CustomerWithCompany = {
@@ -50,9 +50,9 @@ export type CustomerWithCompany = {
     status: number | string | null;
     address_line1: string | null;
     address_line2: string | null;
-    landmark:string|null;
+    landmark: string | null;
     state: string | null;
-    state_id:number|null;
+    state_id: number | null;
     city: string | null;
     pincode: string | null;
     cust_phone: string | number | null;
@@ -62,7 +62,8 @@ export type CustomerWithCompany = {
     company_name: string | null;
     company_email: string | null;
     company_mobile: string | null;
-    state_name:string|null;
+    default_interest:string|null;
+    state_name: string | null;
 };
 
 export type PrefixItem = {
@@ -91,10 +92,9 @@ export class AuthRepository {
     }
 
 
-    async getCompanyname(companyid:number)
-    {
+    async getCompanyname(companyid: number) {
 
-          const rows = await this.db.query(
+        const rows = await this.db.query(
             `
       SELECT
       company_name from company where company_id=?
@@ -234,7 +234,7 @@ export class AuthRepository {
                 company_name: data.company_name,
                 company_email: data.company_email,
                 company_mobile: data.company_mobile,
-                default_interest:data.default_interest,
+                default_interest: data.default_interest,
             };
 
             Object.entries(companyFields).forEach(([key, value]) => {
@@ -378,7 +378,7 @@ export class AuthRepository {
             const company_email = data.company_email || null;
             const company_mobile = data.company_mobile || null;
             const company_name = data.company_name || null;
-            const default_interest=data.default_interest||null
+            const default_interest = data.default_interest || null
 
 
             const created_date = DateTime.now()
@@ -415,7 +415,7 @@ export class AuthRepository {
 
             console.error("insertCompany error", error);
             throw error;
-            
+
         }
     }
 
@@ -498,7 +498,8 @@ export class AuthRepository {
         co.company_id AS company_id,
         co.company_name,
         co.company_email,
-        co.company_mobile
+        co.company_mobile,
+        co.default_interest
       FROM customers cu
       JOIN company co ON cu.comp_id = co.company_id
       LEFT JOIN ab_states st ON  cu.state=st.state_id
@@ -550,7 +551,8 @@ export class AuthRepository {
         const rows = await this.db.query<LoginUserType[]>(
             `
   SELECT customer_id,comp_id,CONCAT(first_name, ' ', last_name) AS full_name
-, cust_email, cust_password,status,cust_phone,role,profile_pic_path
+, cust_email,DATE(subscription_end_date) AS subscription_end_date
+, cust_password,status,cust_phone,role,profile_pic_path
   FROM customers 
   WHERE (cust_phone = ? OR user_name = ?) 
   LIMIT 1
@@ -583,6 +585,7 @@ export class AuthRepository {
     async findemail(email: string): Promise<CustomerId | null> {
 
         try {
+
             const rows = await this.db.query<CustomerId[]>(
                 `
   SELECT customer_id
@@ -594,6 +597,7 @@ export class AuthRepository {
             );
 
             return rows[0] || null;
+
         }
         catch (error) {
             console.error("findemail error is", error)
@@ -602,10 +606,10 @@ export class AuthRepository {
     }
 
 
-    async insertOtp(conn:any,email: string, hash: string, expiry: Date) {
+    async insertOtp(conn: any, email: string, hash: string, expiry: Date) {
 
         try {
-const db =conn ?? this.db;
+            const db = conn ?? this.db;
             const [result] = await db.query(
                 `
      INSERT INTO otp_login

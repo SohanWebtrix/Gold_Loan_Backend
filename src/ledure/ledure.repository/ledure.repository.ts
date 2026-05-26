@@ -14,7 +14,7 @@ export class LedureRepository {
     }
 
     async getTotalCount(userid: number): Promise<number> {
-        
+
         try {
             const rows = await this.db.query<number>(
                 `
@@ -121,7 +121,7 @@ export class LedureRepository {
     }
 
     async getLedgerByClientId(clientId: number, companyId: number, page?: number, limit?: number, filters: any[] = []) {
-        
+
         try {
             const where: string[] = ['le.client_id = ?', 'le.company_id = ?'];
             const values: any[] = [clientId, companyId];
@@ -386,7 +386,8 @@ export class LedureRepository {
                  SELECT le.*,
                 CONCAT(c1.first_name, ' ', c1.last_name) AS client_name,
                 l.loan_document_number as loan_no,
-                ac.account_type as account_name
+                ac.account_type as account_name,
+                ac.bank_name as bank_name
                 FROM ledger_entries le
                 LEFT JOIN clients c1 ON le.client_id = c1.cl_id
                 LEFT JOIN bank_account ac ON le.account_id = ac.id
@@ -421,13 +422,13 @@ export class LedureRepository {
                   SELECT le.*,
                 CONCAT(c1.first_name, ' ', c1.last_name) AS client_name,
                 l.loan_document_number as loan_no,
-                ac.account_type as account_name
+                ac.account_type as account_name,
+                ac.bank_name as bank_name
                   FROM ledger_entries le
                 LEFT JOIN clients c1 ON le.client_id = c1.cl_id
                 LEFT JOIN bank_account ac ON le.account_id = ac.id
                 LEFT JOIN loans l ON le.loan_id=l.loan_id
-                                WHERE le.company_id = ${userid}
-
+                WHERE le.company_id = ${userid}
                 GROUP BY le.entry_id
                 ORDER BY le.entry_id DESC
                 LIMIT ${safeLimit} OFFSET ${safeOffset}

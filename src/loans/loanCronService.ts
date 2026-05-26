@@ -130,7 +130,6 @@ export class LoanCronService {
       }
     }
 
-    console.log('Daily interest cron completed');
   }
 
 }

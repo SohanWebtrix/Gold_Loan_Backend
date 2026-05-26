@@ -11,7 +11,7 @@ import * as Sentry from '@sentry/node';
 import { LOAN_FILTER_SCHEMA } from './loan.filter.schema';
 import { randomBytes } from "crypto";
 import { DateTime } from 'luxon';
-import { filter } from 'rxjs';
+import { filter, first } from 'rxjs';
 
 @Injectable()
 export class LoansService {
@@ -322,6 +322,7 @@ export class LoansService {
           company_name: firstItem.company_name,
           license_number: firstItem.license_number,
           note: firstItem.note,
+          receipt_note_title:firstItem.receipt_note_title,
           company_logo: firstItem.company_logo,
           address: firstItem.address,
         },
@@ -352,15 +353,56 @@ export class LoansService {
 
   async getLoanRecpt(loanId: number) {
     try {
-      const items = await this.loanRepo.getLoanById(loanId);
+     const loan = await this.loanRepo.getLoanById(loanId);
 
+return {
+  success: true,
+  message: 'loan receipt fetched successfully',
+  loan_id: loanId,
 
-      return {
-        success: true,
-        message: 'loan fetched successfully',
-        loan_id: loanId,
-        loan: items,
-      };
+  loan: {
+    loan_id: loan.loan_id,
+    loan_no: loan.loan_no,
+    principal_amount: loan.principal_amount,
+    interest_rate: loan.interest_rate,
+    due_date: loan.due_date,
+    financial_year: loan.financial_year,
+    loan_start_date: loan.loan_start_date,
+    transaction_date: loan.transaction_date,
+    by_hand: loan.created_by_name,
+    total_mortgaged_amount: loan.total_mortgaged_amount,
+  },
+
+  client: {
+    borrower: loan.borrower,
+    caste: loan.caste,
+    client_code: loan.client_code,
+    mobile_no: loan.mobile_no,
+    street_add1: loan.street_add1,
+    city: loan.city,
+    profile_photo: loan.profile_pic_path,
+  },
+
+  company: {
+    company_name: loan.company_name,
+    license_number: loan.license_number,
+    note: loan.note,
+    company_logo: loan.company_logo,
+    address: loan.address,
+  },
+
+  mortgaged_items: (loan.mortgaged_items || []).map((item) => ({
+    mortgaged_id: item.gold_item_id,
+    gold_item: item.gold_item,
+    category: item.category,
+    total_weight: item.total_weight,
+    gross_weight: item.gross_weight,
+    net_weight: item.net_weight,
+    note: item.morgaged_note,
+    amount: item.amount,
+  })),
+};
+
     } catch (error) {
       Sentry.captureException(error);
 
@@ -692,9 +734,9 @@ export class LoansService {
 
           
     const hasFileIndex =
-      item.file_index !== undefined &&
-      item.file_index !== null &&
-      item.file_index !== '';
+      item.proof_file_index !== undefined &&
+      item.proof_file_index !== null &&
+      item.proof_file_index !== '';
 
     // no image uploaded
     if (!hasFileIndex) {
@@ -736,6 +778,18 @@ export class LoansService {
 
       );
 
+                const transactionpaymentdate = DateTime
+              .fromISO(dto.transaction_date, {
+                zone: 'Asia/Kolkata'
+              })
+              .set({
+                hour: nowIST.hour,
+                minute: nowIST.minute,
+                second: nowIST.second,
+                millisecond: 0,
+              })
+              .toFormat('yyyy-MM-dd HH:mm:ss');
+
       // STEP 4: Transaction only for child tables
       await this.db.transaction(async (conn) => {
 
@@ -775,6 +829,7 @@ export class LoansService {
             .insertLoanDisbursementsBulk(
               finalLoanId,
               companyIdNum,
+              transactionpaymentdate,
               disbursementPayments,
               conn
             );
@@ -1303,7 +1358,7 @@ export class LoansService {
 
 
           oldFilesToDelete.push(
-            ...deletedOldFiles
+  ...(deletedOldFiles ?? []).filter(Boolean)
           );
 
           const deletedPaymentFiles =
@@ -1315,7 +1370,7 @@ export class LoansService {
             );
 
           oldFilesToDelete.push(
-            ...deletedPaymentFiles
+  ...(deletedPaymentFiles ?? []).filter(Boolean)
           );
 
 
@@ -1968,6 +2023,7 @@ export class LoansService {
       const start = totalRecords === 0 ? 0 : (page - 1) * limit + 1;
       const end = Math.min(page * limit, totalRecords);
 
+
       return {
         currentPage: page,
         limit,
@@ -1979,8 +2035,11 @@ export class LoansService {
         previousPage: page > 1 ? page - 1 : null,
         data,
       };
+
+
     }
     catch (error) {
+      
       Sentry.captureException(error);
 
       console.error("getBeneficiarylist error", error)
@@ -2005,6 +2064,7 @@ export class LoansService {
         , data
       }
     }
+
     catch (error) {
       console.error("get loan by id error is", error)
     }
@@ -2022,17 +2082,18 @@ export class LoansService {
         , data
       }
     }
+
     catch (error) {
       console.error("get loans error is", error)
     }
   }
 
 
-  async getAllAccount() {
+  async getAllAccount(comapnyid:number) {
 
     try {
 
-      const data = await this.loanRepo.getallbanks();
+      const data = await this.loanRepo.getallbanks(comapnyid);
 
       return {
         message: "bank accounts fetched succesfully"

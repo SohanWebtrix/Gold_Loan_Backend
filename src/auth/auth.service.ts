@@ -50,9 +50,9 @@ export class AuthService {
             // 1️⃣ Insert into company table
             await this.db.transaction(async (conn) => {
 
-                const companyResult: any = await this.authRepo.insertCompany(dto, userId,conn);
+                const companyResult: any = await this.authRepo.insertCompany(dto, userId, conn);
 
-                console.log("comapny result is",companyResult);
+                console.log("comapny result is", companyResult);
 
                 const company_id = companyResult[0].insertId;
 
@@ -72,10 +72,10 @@ export class AuthService {
                 );
             })
 
-      return {
+            return {
                 success: true,
                 message: 'customer added successfully',
-      
+
             };
 
         }
@@ -87,17 +87,17 @@ export class AuthService {
     }
 
     async UpdateCustomer(dto: any, customerIdNumber: number, userId: number) {
-        
+
         try {
             const companyId = Number(dto.company_id);
 
-            console.log("company id inside updateCustomer is",companyId);
+            console.log("company id inside updateCustomer is", companyId);
 
             if (!companyId) {
                 throw new BadRequestException('company_id is required');
             }
 
-                        console.log("customer id is",customerIdNumber);
+            console.log("customer id is", customerIdNumber);
 
             if (!customerIdNumber) {
                 throw new BadRequestException('customer_id are required');
@@ -125,19 +125,21 @@ export class AuthService {
                 customerIdNumber,
             };
         } catch (error) {
-            
+
             console.error('UpdateCustomer error', error);
             throw error;
 
         }
     }
 
+    
     async getCustomerDetails(customerId: number, headerCompId?: number) {
+
         if (!customerId || Number.isNaN(customerId)) {
             throw new BadRequestException('customer_id is required');
         }
 
-        console.log("customer id is inside customer detals",customerId)
+        console.log("customer id is inside customer detals", customerId)
 
         const customer = await this.authRepo.findCustomerWithCompany(customerId);
         if (!customer) {
@@ -148,6 +150,7 @@ export class AuthService {
         const prefixes = await this.authRepo.getPrefixesByCompany(prefixCompanyId);
 
         return {
+
             customer: {
                 customer_id: customer.customer_id,
                 comp_id: customer.comp_id,
@@ -157,19 +160,21 @@ export class AuthService {
                 address_line1: customer.address_line1,
                 address_line2: customer.address_line2,
                 state_name: customer.state_name,
-                state:customer.state_id,
+                state: customer.state_id,
                 city: customer.city,
                 pincode: customer.pincode,
                 cust_phone: customer.cust_phone,
                 cust_email: customer.cust_email,
                 user_name: customer.user_name,
-                landmark:customer.landmark
+                landmark: customer.landmark
             },
+
             company: {
                 company_id: customer.company_id,
                 company_name: customer.company_name,
                 company_email: customer.company_email,
                 company_mobile: customer.company_mobile,
+                interest:customer.default_interest,
             },
             prefixes,
         };
@@ -207,9 +212,9 @@ export class AuthService {
 
         const user = rows;
 
-        const company_name= await this.authRepo.getCompanyname(user.comp_id);
+        const company_name = await this.authRepo.getCompanyname(user.comp_id);
 
-    console.log("company name is",company_name);
+        console.log("company name is", company_name);
 
         // ✅ CHECK STATUS FIRST
         if (user.status !== 'active') {
@@ -242,7 +247,10 @@ export class AuthService {
                 mobile_no: user.cust_phone,
                 role: user.role,
                 profile_path: user.profile_pic_path,
-                company_name,
+                subscription_end_date: user.subscription_end_date
+                    ? new Date(user.subscription_end_date).toISOString().split('T')[0]
+                    : null,
+                     company_name,
             },
         };
     }
@@ -293,59 +301,59 @@ export class AuthService {
 
 
 
-async forgotPassword(email: string) {
-  try {
-    const useremail = await this.authRepo.findemail(email);
+    async forgotPassword(email: string) {
+        try {
+            const useremail = await this.authRepo.findemail(email);
 
-    if (!useremail) {
-      throw new UnauthorizedException('Email not found');
+            if (!useremail) {
+                throw new UnauthorizedException('Email not found');
+            }
+
+            const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+            const hash = await bcrypt.hash(otp, 10);
+
+            const expiry = new Date(Date.now() + 5 * 60 * 1000);
+
+            // DB transaction only
+            const rows = await this.db.transaction(async (conn) => {
+                return await this.authRepo.insertOtp(
+                    conn,
+                    email,
+                    hash,
+                    expiry,
+                );
+            });
+
+            console.log("rows are", rows);
+
+            if (!rows || rows.affectedRows !== 1) {
+                throw new InternalServerErrorException(
+                    'Failed to save OTP',
+                );
+            }
+
+            // Send mail AFTER commit
+            await this.mailService.sendOTP(email, otp);
+
+            return {
+                success: true,
+                message: 'OTP sent successfully',
+            };
+
+        } catch (error) {
+            if (error instanceof HttpException) {
+                throw error;
+            }
+
+            throw new InternalServerErrorException(
+                'Failed to send OTP email. Please try again.',
+            );
+        }
     }
-
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-    const hash = await bcrypt.hash(otp, 10);
-
-    const expiry = new Date(Date.now() + 5 * 60 * 1000);
-
-    // DB transaction only
-    const rows = await this.db.transaction(async (conn) => {
-      return await this.authRepo.insertOtp(
-        conn,
-        email,
-        hash,
-        expiry,
-      );
-    });
-
-    console.log("rows are",rows);
-
-    if (!rows || rows.affectedRows !== 1) {
-      throw new InternalServerErrorException(
-        'Failed to save OTP',
-      );
-    }
-
-    // Send mail AFTER commit
-    await this.mailService.sendOTP(email, otp);
-
-    return {
-      success: true,
-      message: 'OTP sent successfully',
-    };
-
-  } catch (error) {
-    if (error instanceof HttpException) {
-      throw error;
-    }
-
-    throw new InternalServerErrorException(
-      'Failed to send OTP email. Please try again.',
-    );
-  }
-}
 
     async verifyEmailOtp(email: string, otp: string) {
-        
+
         // Compare OTP with hash
 
         try {
@@ -392,6 +400,7 @@ async forgotPassword(email: string) {
     async resetPassword(email: string, newPassword: string) {
 
         try {
+            
             const rows = await this.authRepo.getPassword(email);
 
 

@@ -18,6 +18,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { LedureModule } from './ledure/ledure.module';
 import { AdminModule } from './admin/admin.module';
 import { SettingModule } from './setting/setting.module';
+import { SubscriptionModule } from './subscription/subscription.module';
 
 
 @Module({
@@ -41,6 +42,7 @@ import { SettingModule } from './setting/setting.module';
     LedureModule,
     AdminModule,
     SettingModule,
+    SubscriptionModule,
   ],
   controllers: [AppController],
   providers: [AppService],

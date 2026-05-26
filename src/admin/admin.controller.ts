@@ -106,4 +106,23 @@ export class AdminController {
         );
     }
 
+
+
+      @Post('forgot_password')
+  forgotPassword(@Body('emailid') email: string) {
+
+    return this.adminService.forgotPassword(email);
+
+  }
+
+
+    @Post('reset_password')
+  async resetPassword(
+    @Body() body: { email: string; password: string },
+  ) {
+    
+    return this.adminService.resetPassword(body.email, body.password);
+
+  }
+
 }
