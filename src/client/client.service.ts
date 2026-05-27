@@ -92,7 +92,6 @@ export class ClientService {
       const data = await this.clientRepo.getUsersByid(userId);
       const default_interest=await this.clientRepo.getCompanyinterst(companyId);
 
-      console.log("data is",data);
       
       return {
         message: "client fetched succesfully",

@@ -29,7 +29,7 @@ export const TRANSACTION_FILTER_SCHEMA = {
     },
 
     payment_method: {
-        column: 'tr.payment_method',
+        column: 'tp.payment_type',
         type: 'text',
         operators: ['equals', 'contains', 'starts_with', 'ends_with', 'isEmpty', 'is_not_empty'],
     },

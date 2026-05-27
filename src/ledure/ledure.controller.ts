@@ -28,6 +28,7 @@ export class LedureController {
                 filters,
                 companyIdNum
             );
+            
         }
         
 }

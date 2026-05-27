@@ -20,7 +20,7 @@ export class TransactionsController {
         @Headers('comp-id') companyId: string,
 
     ) {
-
+        
         const userid = req.user.userId;
         const companyIdNum = Number(companyId);
 
@@ -30,7 +30,10 @@ export class TransactionsController {
             filters,
             companyIdNum
         );
+
+
     }
+
 
     @Post('create_transaction')
     @UseGuards(AuthGuard('jwt'))
@@ -66,6 +69,15 @@ export class TransactionsController {
     async getloanbyid(
         @Param('id', ParseIntPipe) id: number) {
         return this.transactionService.getLoanById(id)
+    }
+
+
+        @Get('get_transactionpayment/:id')
+    async getTransactionById(
+
+        @Param('id', ParseIntPipe) id: number) {
+
+        return this.transactionService.getTransactionPaymentById(id)
     }
 
 
@@ -111,6 +123,7 @@ async getClientLoans(
     );
 
 }
+
 
     @Get("tranasactionrecipt/:transactionId")
     @UseGuards(AuthGuard('jwt'))

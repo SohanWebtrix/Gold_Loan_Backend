@@ -55,7 +55,6 @@ export class CustomersService {
     try {
 
       const data = await this.customerRepo.getCountforCustomer(customerid);
-      console.log("data is", data);
 
       if (!data) {
         throw new Error("failed to fetch count ")
@@ -285,6 +284,17 @@ export class CustomersService {
       if (!dto.first_name && !dto.last_name && !dto.cust_name) {
         throw new BadRequestException('Staff name is required');
       }
+
+      const logincust=await this.customerRepo.getEndDate(userId);
+
+      if (!logincust?.length) {
+  throw new BadRequestException('Customer not found');
+}
+
+
+      dto.subscription_end_date=logincust?.[0].subscription_end_date;
+
+      console.log("dto subscription date is",dto.subscription_end_date)
 
       const result = await this.customerRepo.insertStaff(dto, userId, companyId);
       console.log('result is ', result);

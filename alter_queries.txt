@@ -201,3 +201,8 @@ ALTER TABLE transaction_payment
 ADD CONSTRAINT fk_transaction_payment_transaction_id
 FOREIGN KEY (transaction_id)
 REFERENCES loan_transactions(transaction_id);
+
+
+23- new tables to share with sir 
+
+subscription_table

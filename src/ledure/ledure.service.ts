@@ -12,7 +12,7 @@ export class LedureService {
 
   }
 
-  async   getLedureList(
+  async  getLedureList(
     page: number,
     limit: number,
     filters: any[] = [],
@@ -81,7 +81,7 @@ export class LedureService {
                   Sentry.captureException(error);
       
       console.error("get ledure list error", error)
-      throw new InternalServerErrorException("Failed to fetch ledure list");
+      throw new InternalServerErrorException("Failed to fetch ledger list");
 
     }
   }

@@ -29,7 +29,7 @@ export class ClientRepository {
         }
     }
 
-    
+
     async getSearchClients(search: string, companyid: number) {
 
         try {
@@ -279,6 +279,18 @@ export class ClientRepository {
     }
 
 
+    private formatCreateDate(date: any, timezone: string): string | null {
+        if (!date) return null;
+        console.log("inside formatCreateDate");
+
+        return (typeof date === 'string'
+            ? DateTime.fromISO(date)
+            : DateTime.fromJSDate(date)
+        )
+            .setZone(timezone)
+            .toFormat("yyyy-MM-dd HH:mm:ss");
+    }
+
     async insertClient(data: any, userId: number, conn: any) {
         const db = conn ?? this.db;
 
@@ -286,16 +298,25 @@ export class ClientRepository {
         try {
             const payload: any = { ...data, created_by: userId };
 
+            if (payload.created_date) {
+                payload.created_date = this.formatCreateDate(
+                    payload.created_date,
+                    "Asia/Kolkata"
+                );
+            } else {
+                payload.created_date = DateTime.now()
+                    .setZone("Asia/Kolkata")
+                    .toFormat("yyyy-MM-dd HH:mm:ss");
+            }
+
+            console.log("incorrect date is", payload.created_date);
+
             delete payload.remove_adhar;
             delete payload.remove_pan;
             delete payload.remove_photo;
             delete payload.cust_id;
 
 
-
-            payload.created_date = payload.created_date
-                ? this.formatDateForDB(payload.created_date)
-                : DateTime.now().toUTC().toFormat("yyyy-MM-dd HH:mm:ss");
 
             Object.keys(payload).forEach(key => {
                 if (payload[key] === undefined) {
@@ -314,6 +335,7 @@ export class ClientRepository {
 
         }
         catch (error) {
+            
             Sentry.captureException(error);
 
             console.error("updateBeneficiary error is", error)

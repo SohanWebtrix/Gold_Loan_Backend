@@ -64,23 +64,30 @@ export class SubscriptionRepository {
 
 
 
-  async getSubDetails(subid: number) {
+async getSubDetails(custid: number) {
+  try {
+    const rows = await this.db.query(
+      `
+      SELECT 
+        sb.*,
+        CONCAT(cs.first_name, ' ', cs.last_name) AS full_name,
+        cs.customer_id as customer_table_id
+      FROM customers cs
+      LEFT JOIN subscription_table sb
+        ON sb.customer_id = cs.customer_id
+      WHERE cs.customer_id = ?
+      `,
+      [custid]
+    );
 
-    try {
-      const rows = await this.db.query(
-        `SELECT * from subscription_table where sub_id=?
-                 `, [subid]
-      );
+    return rows;
+  } catch (error) {
+    Sentry.captureException(error);
 
-      return rows;
-    }
-    catch (error) {
-      Sentry.captureException(error);
-
-      console.error("get subscription error is", error);
-      throw error;
-    }
+    console.error("get subscription error is", error);
+    throw error;
   }
+}
 
 
   async getSubDetailsforcustomer(id: number) {
@@ -112,6 +119,8 @@ export class SubscriptionRepository {
     }
   }
 
+
+  
   async getSubsByid(subid: number) {
     try {
       const rows = await this.db.query(

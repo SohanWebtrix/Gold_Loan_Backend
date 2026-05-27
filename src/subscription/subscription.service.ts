@@ -24,6 +24,9 @@ export class SubscriptionService {
 
   }
 
+
+
+  
   async searchClient(search: string, page: number,
     limit: number, userid: number) {
 
@@ -75,31 +78,56 @@ export class SubscriptionService {
 
 
 
-  async getSubByid(subid: number) {
+async getSubByid(custid: number) {
 
-    try {
+  try {
+    if (!custid) {
+      throw new BadRequestException("customer id is missing");
+    }
 
-      if (!subid) {
-        throw new BadRequestException("subscription id is missing");
-      }
+    const data = await this.subRepo.getSubDetails(custid);
 
-      const data = await this.subRepo.getSubDetails(subid);
-
+    if (!data?.length) {
       return {
-        message: "subscription details fetched succesfully"
-        , data
-      }
+        message: "customer not found",
+        customer: null,
+        subscription: null,
+      };
     }
 
-    catch (error) {
-      Sentry.captureException(error);
+    const firstitem = data[0];
 
-      console.error("get customer by id error is", error)
-    }
+    const customer = {
+      customer_id: firstitem.customer_table_id,
+      full_name: firstitem.full_name,
+    };
+
+    // remove customer fields from each subscription
+    const subscriptions = data.map(
+      ({
+        full_name,
+        customer_table_id,
+        ...subscription
+      }) => subscription
+    );
+
+    console.log("subscriptions is",subscriptions);
+    return {
+      message: "subscription details fetched succesfully",
+      customer,
+
+      // if no subscription exists => null
+      subscription: subscriptions[0]?.sub_id
+        ? subscriptions
+        : null,
+    };
+  } catch (error) {
+    throw error;
   }
+}
 
 
-   async getSubforcustomer(id: number) {
+  async getSubforcustomer(id: number) {
 
     try {
 
@@ -113,7 +141,7 @@ export class SubscriptionService {
         message: "subscription details fetched succesfully"
         , data
       }
-      
+
     }
 
     catch (error) {
@@ -123,6 +151,29 @@ export class SubscriptionService {
     }
   }
 
+    async getrealSubByid(id: number) {
+
+    try {
+
+      if (!id) {
+        throw new BadRequestException("customer id is missing");
+      }
+
+      const data = await this.subRepo.getSubsByid(id);
+
+      return {
+        message: "subscription details fetched succesfully"
+        , data
+      }
+
+    }
+
+    catch (error) {
+      Sentry.captureException(error);
+
+      console.error("get customer by id error is", error)
+    }
+  }
 
 
   async updateSubscription(
@@ -145,10 +196,10 @@ export class SubscriptionService {
 
       const existingSubs = await this.subRepo.getSubsByid(subid);
       if (!existingSubs) {
-        throw new BadRequestException('Staff not found');
+        throw new BadRequestException('subscription not found');
       }
 
-      console.log("existing staff is", existingSubs);
+      console.log("existing subscription is", existingSubs);
 
       const folderPath = `uploads/subscription/${subid}`;
       await fs.promises.mkdir(folderPath, { recursive: true });

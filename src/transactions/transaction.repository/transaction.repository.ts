@@ -16,33 +16,33 @@ export class TransactionRepository {
     }
 
 
-      async insertTransactionPayment(
+    async insertTransactionPayment(
         loanId: number,
         companyid: number,
-        transactionid:number,
+        transactionid: number,
         payments: any[],
         conn: any
     ) {
 
-        try{
+        try {
 
-        const values = payments.map(
-            item => [
-                loanId,
-                companyid,
-                transactionid,
-                item.account_id,
-                item.payment_type,
-                item.amount,
-                item.transaction_reference_no || null,
-                item.transaction_date || null,
-                item.note || null,
-                item.payment_proof_file || null
-            ]
-        );
+            const values = payments.map(
+                item => [
+                    loanId,
+                    companyid,
+                    transactionid,
+                    item.account_id,
+                    item.payment_type,
+                    item.amount,
+                    item.transaction_reference_no || null,
+                    item.transaction_date || null,
+                    item.note || null,
+                    item.payment_proof_file || null
+                ]
+            );
 
-        await conn.query(
-            `
+            await conn.query(
+                `
     INSERT INTO transaction_payment (
       loan_id,
       company_id,
@@ -57,18 +57,17 @@ export class TransactionRepository {
     )
     VALUES ?
     `,
-            [values]
-        );
-    }
-    catch(error)
-    {
+                [values]
+            );
+        }
+        catch (error) {
 
-        console.error("insert loan disbursement bulk error is",error);
+            console.error("insert loan disbursement bulk error is", error);
 
-    }
+        }
     }
 
-    
+
     async updateBankBalance(accountid: number, account_balance: number, conn) {
 
         try {
@@ -79,7 +78,7 @@ export class TransactionRepository {
                 `
         UPDATE bank_account
         SET
-        bank_balance = ?
+        remaining_balance = ?
         WHERE id = ?
         `,
 
@@ -627,6 +626,42 @@ LIMIT 1
         }
     }
 
+     async getTransactionPayments(transactionId: number) {
+        try {
+
+            const TransactionRows: any[] = await this.db.query(
+                `
+     SELECT * from transaction_payment where transaction_id=?
+      `,
+                [transactionId]
+            );
+
+            if (!TransactionRows.length) {
+                return {
+                    success: false,
+                    message: 'transaction payment not found',
+                };
+            }
+
+
+            return TransactionRows;
+
+        } catch (error) {
+
+            Sentry.captureException(error);
+
+            console.error(
+                '❌ getLoanFullDetails error:',
+                error
+            );
+
+            throw new InternalServerErrorException(
+                'Failed to fetch loan details'
+            );
+        }
+    }
+
+
     async generateNumber(companyId: number, docType: string, conn?: any): Promise<string> {
 
         const db = conn ?? this.db;
@@ -764,6 +799,8 @@ LIMIT 1
           FROM loan_transactions tr
           LEFT JOIN loans l ON tr.loan_id = l.loan_id
           LEFT JOIN clients c1 ON tr.client_id = c1.cl_id
+               LEFT JOIN transaction_payment tp
+        ON tp.transaction_id = tr.transaction_id
           ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
         `;
 
@@ -847,18 +884,35 @@ LIMIT 1
             const sql = `
             SELECT tr.*,
             CONCAT(c1.first_name, ' ', c1.last_name) as client_name,
-            l.loan_document_number  AS loan_document_number
-
+            l.loan_document_number  AS loan_document_number,
+            GROUP_CONCAT(
+          DISTINCT tp.payment_type
+          ORDER BY tp.payment_type
+          SEPARATOR ','
+        ) AS payment_types
             FROM loan_transactions tr
             LEFT JOIN clients c1 ON tr.client_id = c1.cl_id
             LEFT JOIN loans l ON tr.loan_id = l.loan_id
+               LEFT JOIN transaction_payment tp
+        ON tp.transaction_id = tr.transaction_id
             ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+        GROUP BY tr.transaction_id
             ORDER BY tr.transaction_id DESC
             LIMIT ${safeLimit} OFFSET ${safeOffset}
           `;
 
+                  console.log("sql in findWithFIlters in transaction repository is",sql);
+                  console.log("value inside findWithFIlters",values)
+
             const rows = await this.db.query(sql, values);
-            return rows;
+
+ return rows.map((row) => ({
+                ...row,
+                payment_types: row.payment_types
+                    ? row.payment_types.split(",")
+                    : []
+            }));
+        
         }
         catch (error) {
 
@@ -882,22 +936,38 @@ LIMIT 1
             const sql = `
           SELECT tr.*,
           CONCAT(c1.first_name, ' ', c1.last_name) as client_name,
-            l.loan_document_number  AS loan_document_number
+            l.loan_document_number  AS loan_document_number,
+                 GROUP_CONCAT(
+          DISTINCT tp.payment_type
+          ORDER BY tp.payment_type
+          SEPARATOR ','
+        ) AS payment_types
+
           FROM loan_transactions tr
           LEFT JOIN clients c1 ON tr.client_id = c1.cl_id
           LEFT JOIN loans l ON tr.loan_id = l.loan_id
+              LEFT JOIN transaction_payment tp
+        ON tp.transaction_id = tr.transaction_id
             WHERE tr.company_id = ${userid}
+              GROUP BY tr.transaction_id
+
           ORDER BY tr.transaction_id  DESC
           LIMIT ${safeLimit} OFFSET ${safeOffset}
         `;
 
             const rows = await this.db.query(sql);
-            return rows;
+            return rows.map((row) => ({
+                ...row,
+                payment_types: row.payment_types
+                    ? row.payment_types.split(",")
+                    : []
+            }));
+
         }
 
         catch (error) {
             Sentry.captureException(error);
-
+        
             console.error("findAll is", error)
             throw error
         }

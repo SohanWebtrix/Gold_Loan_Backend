@@ -124,6 +124,23 @@ GROUP BY c.customer_id;`, [customerId])
     }
 
 
+       async getEndDate(userid: number) {
+        try {
+            const rows = await this.db.query(
+                'SELECT subscription_end_date FROM customers WHERE customer_id = ? LIMIT 1',
+                [userid]
+            );
+            return rows;
+        }
+        catch (error) {
+            Sentry.captureException(error);
+
+            console.error("get company by id erros is", error)
+            throw error;
+        }
+    }
+
+
 
     async getStaffById(staffId: number) {
         try {
@@ -146,6 +163,8 @@ GROUP BY c.customer_id;`, [customerId])
                 ? await bcrypt.hash(data.cust_password, 10)
                 : null;
 
+                console.log("data in insertStaff is",data);
+                
             const cust_name =
                 [data.first_name, data.last_name].filter(Boolean).join(' ').trim() || null;
 
@@ -172,6 +191,7 @@ GROUP BY c.customer_id;`, [customerId])
                 cust_password,
                 created_by: userId,
                 created_date,
+                subscription_end_date:data.subscription_end_date,
             };
 
             const columns = Object.keys(payload);

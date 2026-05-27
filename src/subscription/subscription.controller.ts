@@ -52,7 +52,6 @@ export class SubscriptionController {
     }
 
 
-
     @Put('update_subscription/:subid')
     @UseGuards(AuthGuard('jwt'))
     @UseInterceptors(
@@ -80,12 +79,17 @@ export class SubscriptionController {
     }
 
 
-    @Get('get_subs/:subid')
+    @Get('get_subs/:cust_id')
+    async getCustSubsById(
+        @Param('cust_id', ParseIntPipe) custid: number) {
+        return this.subservice.getSubByid(custid)
+    }
+
+
+        @Get('get_editsubs/:subid')
     async getSubsById(
-        @Param('subid', ParseIntPipe) subid: number) {
-
-        return this.subservice.getSubByid(subid)
-
+        @Param('subid', ParseIntPipe) sbuid: number) {
+        return this.subservice.getrealSubByid(sbuid)
     }
 
 

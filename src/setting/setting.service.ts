@@ -1,5 +1,5 @@
 /* eslint-disable prettier/prettier */
-import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { SettingRepository } from './setting.repository/setting.repository';
 import { error } from 'console';
 import { DateTime } from 'luxon';
@@ -423,6 +423,17 @@ private async replaceCompanyFile(
               }
             }),
           );
+
+           if (error.code === "ER_DUP_ENTRY") {
+                          
+                                  const msg = error.sqlMessage;
+                          
+                                  if (msg.includes("cust_email")) {
+                                    throw new ConflictException("Email ID already exists");
+                                  }
+                          
+                                  throw new ConflictException("Duplicate value detected");
+                                }
     
           throw new InternalServerErrorException('Failed to update profile');
         }

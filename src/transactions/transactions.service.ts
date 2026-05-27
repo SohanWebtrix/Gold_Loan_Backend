@@ -148,7 +148,7 @@ export class TransactionsService {
 
       const nowIST = DateTime.now()
         .setZone('Asia/Kolkata');
- 
+
       const transactionDateTime = DateTime
         .fromISO(dto.transaction_date, {
           zone: 'Asia/Kolkata'
@@ -446,7 +446,7 @@ export class TransactionsService {
         await this.db.transaction(async (conn) => {
           dto.receipt_no = await this.transactionrepo.generateNumber(companyId, "TRANSACTION", conn);
 
-      
+
 
           const insertResult =
             await this.transactionrepo.insertTransaction(
@@ -485,7 +485,7 @@ export class TransactionsService {
             insertResult.insertId;
 
 
-                if (disbursementPayments?.length) {
+          if (disbursementPayments?.length) {
 
             await this.transactionrepo
               .insertTransactionPayment(
@@ -593,26 +593,26 @@ export class TransactionsService {
 
           if (dto.transaction_type === 'TOPUP') {
 
-           const totalTopup =
-  disbursementPayments.reduce(
-    (sum, payment) =>
-      sum + Number(payment.amount || 0),
-    0
-  );
+            const totalTopup =
+              disbursementPayments.reduce(
+                (sum, payment) =>
+                  sum + Number(payment.amount || 0),
+                0
+              );
 
-await this.createMultipleAccountEntries(
-  disbursementPayments,
-  insertId,
-  loan,
-  dto,
-  companyId,
-  istNow,
-  transactionDateTime,
-  conn,
-  {
-    type: 'debit'
-  }
-);
+            await this.createMultipleAccountEntries(
+              disbursementPayments,
+              insertId,
+              loan,
+              dto,
+              companyId,
+              istNow,
+              transactionDateTime,
+              conn,
+              {
+                type: 'debit'
+              }
+            );
             // SINGLE LOAN ENTRY
             const loanBalanceAfter =
               latestLoanBalance +
@@ -756,19 +756,19 @@ await this.createMultipleAccountEntries(
                 conn
               );
 
-          await this.createMultipleAccountEntries(
-  disbursementPayments,
-  insertId,
-  loan,
-  dto,
-  companyId,
-  istNow,
-  transactionDateTime,
-  conn,
-   {
-    type: 'credit'
-  }
-);
+            await this.createMultipleAccountEntries(
+              disbursementPayments,
+              insertId,
+              loan,
+              dto,
+              companyId,
+              istNow,
+              transactionDateTime,
+              conn,
+              {
+                type: 'credit'
+              }
+            );
 
 
           }
@@ -805,19 +805,19 @@ await this.createMultipleAccountEntries(
               conn
             );
 
-          await this.createMultipleAccountEntries(
-  disbursementPayments,
-  insertId,
-  loan,
-  dto,
-  companyId,
-  istNow,
-  transactionDateTime,
-  conn,
-   {
-    type: 'credit'
-  }
-);
+            await this.createMultipleAccountEntries(
+              disbursementPayments,
+              insertId,
+              loan,
+              dto,
+              companyId,
+              istNow,
+              transactionDateTime,
+              conn,
+              {
+                type: 'credit'
+              }
+            );
 
             // await this.transactionrepo.updateBankBalance(dto.account_type,accountBalanceAfter,conn)
 
@@ -828,7 +828,7 @@ await this.createMultipleAccountEntries(
             const loanBalanceAfter =
               latestLoanBalance - principalPaid;
 
-           
+
 
             await this.transactionrepo.insertLedger(
               {
@@ -853,19 +853,19 @@ await this.createMultipleAccountEntries(
             // Ledger Entry 2
             // CR Selected Account
             // -------------------------------------
-          await this.createMultipleAccountEntries(
-  disbursementPayments,
-  insertId,
-  loan,
-  dto,
-  companyId,
-  istNow,
-  transactionDateTime,
-  conn,
-   {
-    type: 'credit'
-  }
-);
+            await this.createMultipleAccountEntries(
+              disbursementPayments,
+              insertId,
+              loan,
+              dto,
+              companyId,
+              istNow,
+              transactionDateTime,
+              conn,
+              {
+                type: 'credit'
+              }
+            );
 
             // await this.transactionrepo.updateBankBalance(dto.account_type,accountBalanceAfter,conn)
 
@@ -946,114 +946,114 @@ await this.createMultipleAccountEntries(
 
 
 
- private async createMultipleAccountEntries(
-  payments: any[],
-  insertId: number,
-  loan: any,
-  dto: any,
-  companyId: number,
-  istNow: string,
-  transactionDateTime: string,
-  conn: any,
-  options: {
-    type: 'credit' | 'debit';
-  }
-) {
+  private async createMultipleAccountEntries(
+    payments: any[],
+    insertId: number,
+    loan: any,
+    dto: any,
+    companyId: number,
+    istNow: string,
+    transactionDateTime: string,
+    conn: any,
+    options: {
+      type: 'credit' | 'debit';
+    }
+  ) {
 
-  for (const payment of payments) {
+    for (const payment of payments) {
 
-    const accountId =
-      Number(payment.account_id);
+      const accountId =
+        Number(payment.account_id);
 
-    const paidAmount =
-      Number(payment.amount || 0);
+      const paidAmount =
+        Number(payment.amount || 0);
 
-    const latestAccountBalance: any =
+      const latestAccountBalance: any =
+        await this.transactionrepo
+          .getLatestAccountBalance(
+            accountId,
+            conn
+          );
+
+      let accountBalanceAfter = 0;
+      let debit = 0;
+      let credit = 0;
+
+      if (options.type === 'credit') {
+
+        accountBalanceAfter =
+          latestAccountBalance +
+          paidAmount;
+
+        credit = paidAmount;
+
+      } else {
+
+        // debit case (TOPUP)
+        if (paidAmount > latestAccountBalance) {
+
+          throw new BadRequestException(
+            `Insufficient balance in account ${accountId}`
+          );
+        }
+
+        accountBalanceAfter =
+          latestAccountBalance -
+          paidAmount;
+
+        debit = paidAmount;
+      }
+
       await this.transactionrepo
-        .getLatestAccountBalance(
+        .updateBankBalance(
           accountId,
+          accountBalanceAfter,
           conn
         );
 
-    let accountBalanceAfter = 0;
-    let debit = 0;
-    let credit = 0;
+      await this.transactionrepo
+        .insertLedger(
+          {
+            transaction_id:
+              insertId,
 
-    if (options.type === 'credit') {
+            loan_id:
+              dto.loan_id,
 
-      accountBalanceAfter =
-        latestAccountBalance +
-        paidAmount;
+            client_id:
+              loan.client_id,
 
-      credit = paidAmount;
+            company_id:
+              companyId,
 
-    } else {
+            account_id:
+              accountId,
 
-      // debit case (TOPUP)
-      if (paidAmount > latestAccountBalance) {
+            debit,
+            credit,
 
-        throw new BadRequestException(
-          `Insufficient balance in account ${accountId}`
+            entry_type:
+              dto.transaction_type,
+
+            balance_after:
+              accountBalanceAfter,
+
+            status:
+              options.type,
+
+            type:
+              "account",
+
+            entry_date:
+              istNow,
+
+            transaction_date:
+              transactionDateTime,
+          },
+          conn
         );
-      }
-
-      accountBalanceAfter =
-        latestAccountBalance -
-        paidAmount;
-
-      debit = paidAmount;
     }
-
-    await this.transactionrepo
-      .updateBankBalance(
-        accountId,
-        accountBalanceAfter,
-        conn
-      );
-
-    await this.transactionrepo
-      .insertLedger(
-        {
-          transaction_id:
-            insertId,
-
-          loan_id:
-            dto.loan_id,
-
-          client_id:
-            loan.client_id,
-
-          company_id:
-            companyId,
-
-          account_id:
-            accountId,
-
-          debit,
-          credit,
-
-          entry_type:
-            dto.transaction_type,
-
-          balance_after:
-            accountBalanceAfter,
-
-          status:
-            options.type,
-
-          type:
-            "account",
-
-          entry_date:
-            istNow,
-
-          transaction_date:
-            transactionDateTime,
-        },
-        conn
-      );
   }
-}
 
   async saveFile(
     file: Express.Multer.File,
@@ -1143,6 +1143,32 @@ await this.createMultipleAccountEntries(
 
       return {
         message: "loan fetched succesfully"
+        , data
+      }
+    }
+    catch (error) {
+
+      Sentry.captureException(error);
+
+
+      console.error("get loan by id error is", error)
+
+    }
+  }
+
+
+  async getTransactionPaymentById(transactionid: number) {
+
+    try {
+
+      if (!transactionid) {
+        throw new BadRequestException("loan id is missing");
+      }
+
+      const data = await this.transactionrepo.getTransactionPayments(transactionid);
+
+      return {
+        message: "transaction details fetched succesfully"
         , data
       }
     }
@@ -1356,7 +1382,7 @@ await this.createMultipleAccountEntries(
             company_logo: row.company_logo,
             company_address: row.address,
             // mortgaged_items: []
-              payment_types: [] // add this
+            payment_types: [] // add this
 
           };
 
@@ -1391,14 +1417,15 @@ await this.createMultipleAccountEntries(
         // }
 
 
-          // <-- MOVE THIS OUTSIDE if (!receipt)
-  if (
-    row.payment_type &&
-    !receipt.payment_types.includes(row.payment_type)
-  ) {
-    
-    receipt.payment_types.push(row.payment_type);
-  }
+        // <-- MOVE THIS OUTSIDE if (!receipt)
+
+        if (
+          row.payment_type &&
+          !receipt.payment_types.includes(row.payment_type)
+        ) {
+
+          receipt.payment_types.push(row.payment_type);
+        }
 
         return acc;
       }, []);

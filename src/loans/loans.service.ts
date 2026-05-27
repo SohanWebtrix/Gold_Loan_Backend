@@ -700,11 +700,11 @@ return {
     const file =
       files?.gold_item?.[item.file_index];
 
-    if (!file) {
-      throw new BadRequestException(
-        `File missing for index ${item.file_index}`
-      );
-    }
+    // if (!file) {
+    //   throw new BadRequestException(
+    //     `File missing for index ${item.file_index}`
+    //   );
+    // }
 
     const imgPath = await this.saveFile(
       file,
@@ -989,6 +989,13 @@ return {
               },
               conn
             );
+
+                   await this.loanRepo
+      .updateBankBalance(
+        accountId,
+        accountBalanceAfter,
+        conn
+      );
           }
 
 
@@ -1022,6 +1029,9 @@ return {
             },
             conn
           );
+
+       
+
 
         }
 

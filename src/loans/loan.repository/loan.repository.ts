@@ -78,7 +78,7 @@ export class LoanRepository {
                 `
     UPDATE bank_account
     SET
-    bank_balance = ?
+    remaining_balance = ?
     WHERE id = ?
     `,
 
@@ -2019,15 +2019,50 @@ LIMIT 1
     [loanId]
                 );
 
-            const transaction = await this.db.query(
-                `
-      SELECT *
-      FROM loan_transactions
-      WHERE loan_id = ?
-      ORDER BY transaction_id ASC
-      `,
-                [loanId]
-            );
+            const transactions: any[] = await this.db.query(
+  `
+  SELECT *
+  FROM loan_transactions
+  WHERE loan_id = ?
+  ORDER BY transaction_id ASC
+  `,
+  [loanId]
+);
+
+// get transaction ids
+const transactionIds = transactions.map(
+  (t) => t.transaction_id
+);
+
+let transactionPayments: any[] = [];
+
+if (transactionIds.length) {
+  transactionPayments = await this.db.bulkQuery(
+    `
+    SELECT
+      transaction_id,
+      payment_type,
+      transaction_reference_no
+    FROM transaction_payment
+    WHERE transaction_id IN (?)
+    `,
+    [transactionIds]
+  );
+}
+
+// attach payments to each transaction
+const transaction = transactions.map((trx) => ({
+  ...trx,
+  payments: transactionPayments
+    .filter(
+      (p) => p.transaction_id === trx.transaction_id
+    )
+    .map((p) => ({
+      payment_type: p.payment_type,
+      transaction_reference_no:
+        p.transaction_reference_no
+    }))
+}));
 
 
             return {
