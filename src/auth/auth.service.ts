@@ -7,6 +7,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { MailService } from 'src/mail/mail.service';
 import { DatabaseService } from 'src/database/database.service';
+import * as Sentry from '@sentry/node';
 
 
 @Injectable()
@@ -95,6 +96,9 @@ export class AuthService {
         catch (error) {
             console.error("create prefix error", error);
 
+            Sentry.captureException(error);
+
+
             if (error.code === "ER_DUP_ENTRY") {
 
                 const msg = error.sqlMessage;
@@ -159,7 +163,10 @@ export class AuthService {
 
             console.error('UpdateCustomer error', error);
 
-               if (error.code === "ER_DUP_ENTRY") {
+            Sentry.captureException(error);
+
+
+            if (error.code === "ER_DUP_ENTRY") {
 
                 const msg = error.sqlMessage;
 
@@ -181,7 +188,7 @@ export class AuthService {
 
             throw error;
 
-            
+
 
         }
     }
@@ -189,50 +196,60 @@ export class AuthService {
 
     async getCustomerDetails(customerId: number, headerCompId?: number) {
 
-        if (!customerId || Number.isNaN(customerId)) {
-            throw new BadRequestException('customer_id is required');
+        try {
+
+            if (!customerId || Number.isNaN(customerId)) {
+                throw new BadRequestException('customer_id is required');
+            }
+
+
+            const customer = await this.authRepo.findCustomerWithCompany(customerId);
+            if (!customer) {
+                throw new BadRequestException('Customer not found');
+            }
+
+
+            const prefixCompanyId = headerCompId || customer.comp_id;
+            const prefixes = await this.authRepo.getPrefixesByCompany(prefixCompanyId);
+
+            return {
+
+                customer: {
+                    customer_id: customer.customer_id,
+                    comp_id: customer.comp_id,
+                    first_name: customer.first_name,
+                    last_name: customer.last_name,
+                    status: customer.status,
+                    address_line1: customer.address_line1,
+                    address_line2: customer.address_line2,
+                    state_name: customer.state_name,
+                    state: customer.state,
+                    city: customer.city,
+                    pincode: customer.pincode,
+                    cust_phone: customer.cust_phone,
+                    cust_email: customer.cust_email,
+                    user_name: customer.user_name,
+                    landmark: customer.landmark
+                },
+
+                company: {
+                    company_id: customer.company_id,
+                    company_name: customer.company_name,
+                    company_email: customer.company_email,
+                    company_mobile: customer.company_mobile,
+                    comp_address_line1: customer.address,
+                    interest: customer.default_interest,
+                },
+                prefixes,
+            };
         }
+        catch (error) {
 
+            Sentry.captureException(error);
 
-        const customer = await this.authRepo.findCustomerWithCompany(customerId);
-        if (!customer) {
-            throw new BadRequestException('Customer not found');
+            throw error;
+
         }
-
-
-        const prefixCompanyId = headerCompId || customer.comp_id;
-        const prefixes = await this.authRepo.getPrefixesByCompany(prefixCompanyId);
-
-        return {
-
-            customer: {
-                customer_id: customer.customer_id,
-                comp_id: customer.comp_id,
-                first_name: customer.first_name,
-                last_name: customer.last_name,
-                status: customer.status,
-                address_line1: customer.address_line1,
-                address_line2: customer.address_line2,
-                state_name: customer.state_name,
-                state: customer.state,
-                city: customer.city,
-                pincode: customer.pincode,
-                cust_phone: customer.cust_phone,
-                cust_email: customer.cust_email,
-                user_name: customer.user_name,
-                landmark: customer.landmark
-            },
-
-            company: {
-                company_id: customer.company_id,
-                company_name: customer.company_name,
-                company_email: customer.company_email,
-                company_mobile: customer.company_mobile,
-                comp_address_line1:customer.address,
-                interest: customer.default_interest,
-            },
-            prefixes,
-        };
     }
 
     async CreateAdmin(dto: any) {
@@ -252,68 +269,78 @@ export class AuthService {
             throw new InternalServerErrorException("Failed to add admin");
         }
         catch (error) {
+            Sentry.captureException(error);
+            
+
             console.error("CreateAdmin error", error)
             throw error;
         }
     }
 
     async loginWithEmail(login_id: string, password: string) {
+        try {
 
-        const rows = await this.authRepo.loginemail(login_id);
+            const rows = await this.authRepo.loginemail(login_id);
 
-        if (!rows) {
-            throw new UnauthorizedException('Invalid username or mobile number');
+            if (!rows) {
+                throw new UnauthorizedException('Invalid username or mobile number');
+            }
+
+            const user = rows;
+
+            const company = await this.authRepo.getCompanyname(user.comp_id);
+
+            if (!company) {
+                throw new Error("comapny not found")
+            }
+            const comapny_name = company.company_name;
+            const subscription_end_date = company.subscription_end_date;
+
+
+
+            // ✅ CHECK STATUS FIRST
+            if (user.status !== 'active') {
+                throw new UnauthorizedException('User is inactive');
+            }
+
+
+            const isMatch = await bcrypt.compare(password, user.cust_password);
+            if (!isMatch) {
+                throw new UnauthorizedException('Invalid username or password');
+            }
+
+
+            // ✅ Use generateTokens
+            const { accessToken, refreshToken } =
+                await this.generateTokens({
+                    id: user.customer_id,
+                    email: user.cust_email,
+                });
+
+            return {
+                message: 'Login successful',
+                accessToken,
+                refreshToken,
+                user: {
+                    id: user.customer_id,
+                    email: user.cust_email,
+                    name: user.full_name,
+                    comp_id: user.comp_id,
+                    mobile_no: user.cust_phone,
+                    role: user.role,
+                    profile_path: user.profile_pic_path,
+                    subscription_end_date: subscription_end_date
+                        ? new Date(subscription_end_date).toISOString().split('T')[0]
+                        : null,
+                    comapny_name,
+                },
+            };
         }
+        catch (error) {
+            Sentry.captureException(error);
+            throw error;
 
-        const user = rows;
-
-        const company = await this.authRepo.getCompanyname(user.comp_id);
-
-        if (!company) {
-            throw new Error("comapny not found")
         }
-        const comapny_name = company.company_name;
-        const subscription_end_date = company.subscription_end_date;
-
-
-
-        // ✅ CHECK STATUS FIRST
-        if (user.status !== 'active') {
-            throw new UnauthorizedException('User is inactive');
-        }
-
-
-        const isMatch = await bcrypt.compare(password, user.cust_password);
-        if (!isMatch) {
-            throw new UnauthorizedException('Invalid username or password');
-        }
-
-
-        // ✅ Use generateTokens
-        const { accessToken, refreshToken } =
-            await this.generateTokens({
-                id: user.customer_id,
-                email: user.cust_email,
-            });
-
-        return {
-            message: 'Login successful',
-            accessToken,
-            refreshToken,
-            user: {
-                id: user.customer_id,
-                email: user.cust_email,
-                name: user.full_name,
-                comp_id: user.comp_id,
-                mobile_no: user.cust_phone,
-                role: user.role,
-                profile_path: user.profile_pic_path,
-                subscription_end_date: subscription_end_date
-                    ? new Date(subscription_end_date).toISOString().split('T')[0]
-                    : null,
-                comapny_name,
-            },
-        };
     }
 
     async loginEmailAdmin(login_id: string, password: string) {
@@ -402,6 +429,8 @@ export class AuthService {
             };
 
         } catch (error) {
+            Sentry.captureException(error);
+
             if (error instanceof HttpException) {
                 throw error;
             }
@@ -450,6 +479,8 @@ export class AuthService {
             };
         }
         catch (error) {
+            Sentry.captureException(error);
+
             console.error("verifyOtp error is", error);
             throw error;
         }
@@ -490,6 +521,8 @@ export class AuthService {
             };
         }
         catch (error) {
+            Sentry.captureException(error);
+
             console.error("reset passwrod error is", error);
             throw error;
         }

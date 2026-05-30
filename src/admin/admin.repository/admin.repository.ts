@@ -474,6 +474,8 @@ export class AdminRepository {
             return result[0]?.total ?? 0;
         }
         catch (error) {
+                        Sentry.captureException(error);
+
             console.error("getFilteredCount is", error)
             throw error;
         }
@@ -554,6 +556,8 @@ export class AdminRepository {
             return rows;
         }
         catch (error) {
+                        Sentry.captureException(error);
+
             console.error("FindWithFilters error is", error)
             throw error;
         }
@@ -579,6 +583,8 @@ export class AdminRepository {
             return rows;
         }
         catch (error) {
+                        Sentry.captureException(error);
+
             console.error("findAll is", error)
             throw error
         }

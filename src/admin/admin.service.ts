@@ -92,6 +92,8 @@ export class AdminService {
       };
     }
     catch (error) {
+            Sentry.captureException(error);
+
       console.error("reset passwrod error is", error);
       Sentry.captureException(error);
 
@@ -355,6 +357,8 @@ export class AdminService {
     }
     catch (error) {
 
+            Sentry.captureException(error);
+
       console.error("fail to fetch bank", error)
 
     }
@@ -378,6 +382,8 @@ export class AdminService {
       throw new InternalServerErrorException("Failed to add admin");
     }
     catch (error) {
+
+            Sentry.captureException(error);
 
       console.error("CreateAdmin error", error)
 
@@ -442,6 +448,8 @@ export class AdminService {
 
 
     catch (error) {
+            Sentry.captureException(error);
+
       console.error("error inside update admin", error);
     }
 
@@ -507,6 +515,9 @@ export class AdminService {
       };
     }
     catch (error) {
+
+            Sentry.captureException(error);
+
       console.error("getAdminList error", error)
       throw new InternalServerErrorException("Failed to fetch Admin list");
     }

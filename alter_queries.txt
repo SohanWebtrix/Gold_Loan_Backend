@@ -248,3 +248,7 @@ DROP COLUMN customer_id;
 
 ALTER TABLE loan_transactions
 DROP COLUMN payment_method;
+
+30
+ALTER TABLE company
+ADD COLUMN subscription_end_date DATE;
