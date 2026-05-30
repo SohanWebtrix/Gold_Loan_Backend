@@ -5,18 +5,22 @@ import { AuthGuard } from '@nestjs/passport';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { CreateLoanDto } from './createLoan.dto';
 
+
+
 @Controller('loans')
 export class LoansController {
 
-    constructor(private readonly loanServ: LoansService) {}
+    constructor(private readonly loanServ: LoansService) { }
 
     @Post('create_loan')
     @UseGuards(AuthGuard('jwt'))
 
     @UseInterceptors(
         FileFieldsInterceptor([ //basically for processing file on server
+
             { name: 'gold_item', maxCount: 20 },
             { name: 'payment_proof_file', maxCount: 20 }
+
         ]),
     )
     async CreateLoan(@Body('data') data: string,
@@ -27,8 +31,7 @@ export class LoansController {
         files: {
             gold_item?: Express.Multer.File[];
             payment_proof_file?: Express.Multer.File[];
-        },) 
-        {
+        },) {
 
         const companyIdNum = Number(companyId);
 
@@ -37,7 +40,7 @@ export class LoansController {
         const transactionFIle = files?.payment_proof_file?.[0];
 
         const userId = req.user.userId;
-            
+
         return this.loanServ.createLoan(
             loanDto,
             files,
@@ -45,8 +48,9 @@ export class LoansController {
             userId,
             companyIdNum,
         );
+        
     }
-    
+
 
     @Get('get_all_loans')
     @UseGuards(AuthGuard('jwt'))
@@ -64,7 +68,7 @@ export class LoansController {
 
     async getAllBanks(@Headers('comp-id') companyId: string,) {
 
-                const companyIdNum = Number(companyId);
+        const companyIdNum = Number(companyId);
 
         return this.loanServ.getAllAccount(companyIdNum)
 
@@ -84,7 +88,6 @@ export class LoansController {
     ) {
 
         const companyIdNum = Number(companyId);
-        console.log("comapny id in loan list is",companyIdNum)
 
         const userid = req.user.userId;
 
@@ -123,7 +126,7 @@ export class LoansController {
 
         const dto = JSON.parse(data);
         const userId = req.user.userId;
-                const companyIdNum = Number(companyId);
+        const companyIdNum = Number(companyId);
 
         return this.loanServ.updateLoan(
             Number(loanId),
@@ -133,7 +136,6 @@ export class LoansController {
             userId,
             companyIdNum,
         );
-
 
     }
 
@@ -151,17 +153,17 @@ export class LoansController {
     ) {
 
         return this.loanServ.getMortgageItemsByLoanId(loanId);
-        
+
     }
 
-        @Get('loan_recpt/:loanId')
+    @Get('loan_recpt/:loanId')
     @UseGuards(AuthGuard('jwt'))
     async getLoanRecpt(
         @Param('loanId', ParseIntPipe) loanId: number,
-    ) { 
+    ) {
 
         return this.loanServ.getLoanRecpt(loanId);
-        
+
     }
 
     @Post('client_summary/:clientId')
@@ -197,23 +199,23 @@ export class LoansController {
 
 
     @Post('searchLoansmobile')
-@UseGuards(AuthGuard('jwt'))
-async searchLoans(
-  @Query('page') page = '1',
-  @Query('limit') limit = '10',
+    @UseGuards(AuthGuard('jwt'))
+    async searchLoans(
+        @Query('page') page = '1',
+        @Query('limit') limit = '10',
 
-  @Body('search') search: string,
+        @Body('search') search: string,
 
-  @Headers('comp-id') companyId: string,
-) {
+        @Headers('comp-id') companyId: string,
+    ) {
 
-  return this.loanServ.searchLoansmobile(
-    search,
-    Number(page),
-    Number(limit),
-    Number(companyId),
-  );
-}
+        return this.loanServ.searchLoansmobile(
+            search,
+            Number(page),
+            Number(limit),
+            Number(companyId),
+        );
+    }
 
 
 }

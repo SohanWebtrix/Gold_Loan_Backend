@@ -108,10 +108,11 @@ REFERENCES customers(customer_id);
 
 alter TABLE company add COLUMN license_number varchar(255);
 
-Next updated querys===========================================================================================================================================================================================================================
+Next updated querys
+===========================================================================================================================================================================================================================
 
 
-14 subscription table 
+14 subscription table
 
 CREATE TABLE subscription_table (
     sub_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -170,7 +171,6 @@ alter TABLE company add COLUMN note varchar(500);
 
 17-
 
-
 ALTER TABLE admins
     ADD CONSTRAINT unique_admin_email UNIQUE (admin_email),
     ADD CONSTRAINT unique_user_name UNIQUE (user_name);
@@ -202,7 +202,49 @@ ADD CONSTRAINT fk_transaction_payment_transaction_id
 FOREIGN KEY (transaction_id)
 REFERENCES loan_transactions(transaction_id);
 
-
 23- new tables to share with sir 
 
 subscription_table
+
+New queireis to update form sir side starts from here ===============================================================================================================================================================================================================================================================================================================
+
+24- indexing columns
+
+getLatestLoanBalance() - CREATE INDEX idx_ledger_loan_type_id
+ON ledger_entries(loan_id, type, entry_id);
+
+getLatestAccountBalance-  CREATE INDEX idx_ledger_account_type_id
+ON ledger_entries(account_id, type, entry_id);
+
+getLastTransaction() - CREATE INDEX idx_transaction_loan_id
+ON loan_transactions(loan_id, transaction_id);
+
+getInterestasofDate- CREATE INDEX idx_daily_interest_loan_date
+ON loan_daily_interest(loan_id, interest_date);
+
+
+tranasaction list - CREATE INDEX idx_transaction_company_transactionid
+ON loan_transactions(company_id, transaction_id);
+
+loans list - CREATE INDEX idx_loan_company_loanid
+ON loans(compl_id, loan_id);
+
+25-
+
+ALTER TABLE `subscription_table` CHANGE `customer_id` `customer_id` INT(11) NULL DEFAULT NULL;
+
+
+27-
+
+ALTER TABLE subscription_table
+DROP FOREIGN KEY fk_customer_subscription_customer;
+
+28-
+
+ALTER TABLE subscription_table
+DROP COLUMN customer_id;
+
+29-
+
+ALTER TABLE loan_transactions
+DROP COLUMN payment_method;

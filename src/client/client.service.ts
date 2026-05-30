@@ -31,7 +31,6 @@ export class ClientService {
 
       const totalRecords = await this.clientRepo.getFilteredCountSearch(search, userid)
 
-      console.log("total Records are", totalRecords)
 
       const totalPages = Math.ceil(totalRecords / limit);
 
@@ -40,10 +39,6 @@ export class ClientService {
 
       const start = totalRecords === 0 ? 0 : (page - 1) * limit + 1;
       const end = Math.min(page * limit, totalRecords);
-
-
-      console.log("total pages are ", totalPages)
-      console.log("end is", end)
 
 
       if (!data || data.length === 0) {
@@ -213,13 +208,12 @@ export class ClientService {
 
   async updateUsers(customerId: number, dto: UpdateClientDto, userId: number) {
 
-    console.log("dto in service is", dto);
+
     try {
       const result = await this.clientRepo.UpdateById(customerId, dto, userId);
 
 
       if (result && result.affectedRows === 1) {
-        console.log("inside result block of if")
         return {
           success: true,
           message: 'Client Updated successfully',
@@ -333,7 +327,6 @@ export class ClientService {
       });
 
 
-      console.log("result is",result);
       // ✅ STEP 2: Get client ID
       cid = result[0].insertId;
 
@@ -379,7 +372,6 @@ export class ClientService {
       // ❌ Cleanup DB (VERY IMPORTANT)
       if (cid) {
         try {
-          console.log("inside catch block if fails to update files")
           const result = await this.clientRepo.deleteClient(cid);
 
           if (result?.affectedRows !== 1) {
@@ -574,7 +566,7 @@ const formattedData = data.map((item) => ({
     }
     catch (error) {
 
-      console.error("getBeneficiarylist error", error)
+      console.error("client list error", error)
       throw new InternalServerErrorException("Failed to fetch Client list");
 
     }

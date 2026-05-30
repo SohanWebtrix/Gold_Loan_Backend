@@ -62,6 +62,7 @@ export type CustomerWithCompany = {
     company_name: string | null;
     company_email: string | null;
     company_mobile: string | null;
+    address:string|null;
     default_interest:string|null;
     state_name: string | null;
 };
@@ -92,18 +93,69 @@ export class AuthRepository {
     }
 
 
+     async blacklistToken(data) {
+
+    const query = `
+    INSERT INTO token_blacklist (token, expires_at)
+    VALUES (?, ?)
+  `;
+
+    await this.db.query(query, [data.token, data.expires_at]);
+  }
+
+
+    async isTokenBlacklisted(token: string): Promise<boolean> {
+
+    if (!token) {
+      return false;
+    }
+
+    const query = `
+    SELECT id FROM token_blacklist
+    WHERE token = ?
+    LIMIT 1
+  `;
+
+    const rows: any = await this.db.query(query, [token]);
+
+    return Array.isArray(rows) && rows.length > 0;
+  }
+
+
+  async deleteExpiredTokens() {
+
+    const query = `
+    DELETE FROM token_blacklist
+    WHERE expires_at < NOW()
+  `;
+
+    await this.db.query(query);
+
+  }
+
+    async deleteExpiredOtps() {
+
+    const query = `
+    DELETE FROM otp_login
+    WHERE expires_at < NOW()
+  `;
+
+    await this.db.query(query);
+    
+  }
+
     async getCompanyname(companyid: number) {
 
         const rows = await this.db.query(
             `
       SELECT
-      company_name from company where company_id=?
+      company_name,subscription_end_date from company where company_id=?
       LIMIT 1
       `,
             [companyid],
         );
 
-        return rows[0].company_name || null;
+        return rows[0] || null;
     }
 
     // REPOSITORY
@@ -172,7 +224,7 @@ export class AuthRepository {
                 item.module,
                 item.prefix,
                 item.year,
-                item.document_no,
+                item.document_no?.trim()||null,
             ]);
 
             const sql = `
@@ -235,6 +287,7 @@ export class AuthRepository {
                 company_email: data.company_email,
                 company_mobile: data.company_mobile,
                 default_interest: data.default_interest,
+                address:data.comp_address_line1,
             };
 
             Object.entries(companyFields).forEach(([key, value]) => {
@@ -261,6 +314,7 @@ export class AuthRepository {
         }
     }
 
+    
     async updateCustomer(customerId: number, data: any, userId: number, conn?: any) {
         const db = conn ?? this.db;
 
@@ -276,10 +330,10 @@ export class AuthRepository {
                 address_line2: data.address_line2,
                 state: data.state,
                 city: data.city,
-                pincode: data.pincode,
+                pincode: data.pincode?.trim()||null,
                 cust_phone: data.cust_phone,
-                cust_email: data.cust_email,
-                user_name: data.user_name,
+                cust_email: data.cust_email?.trim()||null,
+                user_name: data.user_name?.trim()||null,
             };
 
             Object.entries(customerFields).forEach(([key, value]) => {
@@ -378,7 +432,8 @@ export class AuthRepository {
             const company_email = data.company_email || null;
             const company_mobile = data.company_mobile || null;
             const company_name = data.company_name || null;
-            const default_interest = data.default_interest || null
+            const default_interest = data.default_interest || null;
+            const address=data.comp_address_line1||null;
 
 
             const created_date = DateTime.now()
@@ -393,16 +448,18 @@ export class AuthRepository {
                 company_email,
                 company_mobile,
                 default_interest,
+                address,
                 created_by,
                 created_date
             )
-            VALUES (?,?, ?, ?, ?,?)
+            VALUES (?,?, ?, ?,?, ?,?)
             `,
                 [
                     company_name,
                     company_email,
                     company_mobile,
                     default_interest,
+                    address,
                     userId,
                     created_date
                 ]
@@ -499,6 +556,7 @@ export class AuthRepository {
         co.company_name,
         co.company_email,
         co.company_mobile,
+        co.address,
         co.default_interest
       FROM customers cu
       JOIN company co ON cu.comp_id = co.company_id
@@ -529,22 +587,7 @@ export class AuthRepository {
         return rows;
     }
 
-    async isTokenBlacklisted(token: string): Promise<boolean> {
-
-        if (!token) {
-            return false;
-        }
-
-        const query = `
-    SELECT id FROM token_blacklist
-    WHERE token = ?
-    LIMIT 1
-  `;
-
-        const rows: any = await this.db.query(query, [token]);
-
-        return Array.isArray(rows) && rows.length > 0;
-    }
+   
 
     async loginemail(login_id: string): Promise<LoginUserType | null> {
 

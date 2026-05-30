@@ -240,7 +240,6 @@ export class ClientRepository {
 
     async UpdateById(CID: number, dto: UpdateClientDto, userid: number) {
 
-        console.log("dto is in updateById ", dto);
         const filteredDto = Object.fromEntries(  //This converts the array of pairs back into an object.
             Object.entries(dto).filter(([_, value]) => value !== undefined), // converts dto object to array of key value pair
         );
@@ -261,7 +260,6 @@ export class ClientRepository {
             .join(', ');
 
         // 🔥 Convert remaining values (safe)
-        console.log("set clause is", setClause)
         const values = Object.values(filteredDto);
 
         const sql = `
@@ -281,7 +279,6 @@ export class ClientRepository {
 
     private formatCreateDate(date: any, timezone: string): string | null {
         if (!date) return null;
-        console.log("inside formatCreateDate");
 
         return (typeof date === 'string'
             ? DateTime.fromISO(date)
@@ -309,7 +306,6 @@ export class ClientRepository {
                     .toFormat("yyyy-MM-dd HH:mm:ss");
             }
 
-            console.log("incorrect date is", payload.created_date);
 
             delete payload.remove_adhar;
             delete payload.remove_pan;
@@ -520,7 +516,6 @@ export class ClientRepository {
     }
 
     async deleteClient(id: number) {
-        console.log("inside deleteClient repository")
         try {
             const rows = await this.db.query<ResultSetHeader>('delete from clients where cl_id=? limit 1', [id]);
             return rows;
@@ -703,9 +698,7 @@ export class ClientRepository {
                     }
 
                     if (f.operator === 'between') {
-                        console.log("modified date start value", f.value)
-                        console.log("modified date end value", f.valueTo)
-
+                   
                         const startDate = `${f.value} 00:00:00`;
                         const endDate = `${f.valueTo} 23:59:59`;
 

@@ -28,11 +28,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             req.headers.authorization?.split(" ")[1] ||
             req.cookies?.access_token;
 
-        // const isBlacklisted = await this.Authrepo.isTokenBlacklisted(token);
+        const isBlacklisted = await this.Authrepo.isTokenBlacklisted(token);
 
-        // if (isBlacklisted) {
-        //     throw new UnauthorizedException("Token expired");
-        // }
+        if (isBlacklisted) {
+            throw new UnauthorizedException("Token expired");
+        }
 
         return {
             userId: payload.sub,

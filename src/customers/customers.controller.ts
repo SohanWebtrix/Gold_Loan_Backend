@@ -14,6 +14,7 @@ type MulterFile = {
 
 @Controller('customers')
 export class CustomersController {
+
     constructor(private readonly customerService: CustomersService) { }
 
     @Post('create_staff')
@@ -64,9 +65,9 @@ export class CustomersController {
         const staffIdNum = Number(staffId);
 
         const userId = req.user.userId;
-
+        
         const profileFile = files?.profile_picture?.[0];
-
+        
         return await this.customerService.updateStaff(staffIdNum, dto, profileFile, userId);
     }
 
@@ -130,9 +131,8 @@ export class CustomersController {
             filters,
             companyIdNum
         );
+        
     }
-
-
   
 
 }

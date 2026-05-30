@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as Sentry from '@sentry/node';
+import { CUSTOMER_FILTER_ADMIN } from './customer.filter.admin';
 
 
 type MulterFile = {
@@ -21,9 +22,8 @@ export class CustomersService {
 
   }
 
-
-
   async deleteCustomer(Cid: number) {
+
     try {
 
       if (!Cid) {
@@ -39,8 +39,11 @@ export class CustomersService {
 
       }
 
-      return { message: "Customer deleted successfully" };
+      return {
+        success:true,
+         message: "Customer Inactivated Successfully" };
     }
+
     catch (error) {
       Sentry.captureException(error);
 
@@ -48,6 +51,7 @@ export class CustomersService {
       throw new InternalServerErrorException("Failed to Delete Customer");
 
     }
+    
   }
 
 
@@ -60,6 +64,7 @@ export class CustomersService {
         throw new Error("failed to fetch count ")
       }
       return {
+        success:true,
         message: "count fetched succesfully",
         data,
       }
@@ -104,6 +109,8 @@ export class CustomersService {
       const data = await this.customerRepo.getCustoemrdetails(custid);
 
       return {
+                success:true,
+
         message: "customer fetched succesfully"
         , data
       }
@@ -132,7 +139,7 @@ export class CustomersService {
 
       // 🔑 MAP FILTERS HERE
       const validatedFilters = filters.map((f) => {
-        const schema = CUSTOMER_FILTER_SCHEMA[f.field];
+        const schema = CUSTOMER_FILTER_ADMIN[f.field];
 
         if (!schema) {
           throw new Error(`Invalid filter field: ${f.field}`);
@@ -168,6 +175,7 @@ export class CustomersService {
       const end = Math.min(page * limit, totalRecords);
 
       return {
+        success:true,
         currentPage: page,
         limit,
         start,
@@ -183,7 +191,7 @@ export class CustomersService {
 
       Sentry.captureException(error);
 
-      console.error("getBeneficiarylist error", error)
+      console.error("customer list error", error)
       throw new InternalServerErrorException("Failed to fetch Client list");
 
     }
@@ -259,7 +267,7 @@ export class CustomersService {
 
       Sentry.captureException(error);
 
-      console.error("getBeneficiarylist error", error)
+      console.error("customer list by id error", error)
       throw new InternalServerErrorException("Failed to fetch Client list");
 
     }
@@ -285,19 +293,8 @@ export class CustomersService {
         throw new BadRequestException('Staff name is required');
       }
 
-      const logincust=await this.customerRepo.getEndDate(userId);
-
-      if (!logincust?.length) {
-  throw new BadRequestException('Customer not found');
-}
-
-
-      dto.subscription_end_date=logincust?.[0].subscription_end_date;
-
-      console.log("dto subscription date is",dto.subscription_end_date)
 
       const result = await this.customerRepo.insertStaff(dto, userId, companyId);
-      console.log('result is ', result);
       staffId = result.insertId;
 
       if (!staffId) {
@@ -320,6 +317,7 @@ export class CustomersService {
       }
 
       return {
+        success: true,
         message: 'Staff created successfully',
         staff_id: staffId,
       };
@@ -406,12 +404,10 @@ export class CustomersService {
         throw new BadRequestException('Staff not found');
       }
 
-      console.log("existing staff is",existingStaff);
 
       const folderPath = `uploads/staff/${staffId}`;
       await fs.promises.mkdir(folderPath, { recursive: true });
 
-          console.log("dto in update staff is",dto)
 
 
       const profile = await this.replaceStaffFile(
@@ -420,10 +416,9 @@ export class CustomersService {
         'profile',
         folderPath,
         existingStaff.profile_pic_path,
-          dto.remove_profile === 'true',
+        dto.remove_profile === 'true',
       );
 
-      console.log("profile inside customer service is",profile);
 
       if (profile.filePath) {
 
@@ -443,10 +438,9 @@ export class CustomersService {
 
       delete payload.remove_profile;
 
-payload.cust_email = payload.cust_email?.trim() || null;
-payload.user_name = payload.user_name?.trim() || null;
+      payload.cust_email = payload.cust_email?.trim() || null;
+      payload.user_name = payload.user_name?.trim() || null;
 
-console.log("user name is",payload.user_name);
 
       const result = await this.customerRepo.updateStaff(staffId, payload, userId);
 
@@ -464,6 +458,8 @@ console.log("user name is",payload.user_name);
       );
 
       return {
+        success: true,
+
         message: 'Staff updated successfully',
         data: result,
       };
@@ -494,15 +490,12 @@ console.log("user name is",payload.user_name);
     removeFile?: boolean,
   ): Promise<{ dbPath?: string | null; filePath?: string | null; oldFileToDelete?: string | null }> {
 
-    console.log("rmeove file in replace staff file is",removeFile);
 
     if (removeFile) {
-      console.log("inside remove file in replaceStaffFile");
 
       return { dbPath: null, oldFileToDelete: oldFilePath ?? null };
     }
 
-    console.log("folder path inside replace staff file is",folderPath);
 
     if (!file) {
       return {};
@@ -519,8 +512,7 @@ console.log("user name is",payload.user_name);
     const filePath = path.join(folderPath, fileName);
     const dbPath = `/${folderPath}/${fileName}`;
 
-    console.log("dbPath is in replaceStaff is",dbPath);
-    console.log("file path is",filePath);
+  
 
     await fs.promises.writeFile(filePath, file.buffer);
 

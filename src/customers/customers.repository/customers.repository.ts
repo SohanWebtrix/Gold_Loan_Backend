@@ -124,21 +124,7 @@ GROUP BY c.customer_id;`, [customerId])
     }
 
 
-       async getEndDate(userid: number) {
-        try {
-            const rows = await this.db.query(
-                'SELECT subscription_end_date FROM customers WHERE customer_id = ? LIMIT 1',
-                [userid]
-            );
-            return rows;
-        }
-        catch (error) {
-            Sentry.captureException(error);
-
-            console.error("get company by id erros is", error)
-            throw error;
-        }
-    }
+    
 
 
 
@@ -163,7 +149,6 @@ GROUP BY c.customer_id;`, [customerId])
                 ? await bcrypt.hash(data.cust_password, 10)
                 : null;
 
-                console.log("data in insertStaff is",data);
                 
             const cust_name =
                 [data.first_name, data.last_name].filter(Boolean).join(' ').trim() || null;
@@ -241,7 +226,6 @@ GROUP BY c.customer_id;`, [customerId])
                 Object.entries(payload).filter(([, value]) => value !== undefined),
             );
 
-            console.log("filtered payload is",filteredPayload);
 
             if (!Object.keys(filteredPayload).length) {
                 throw new Error('Nothing to update');
@@ -329,8 +313,8 @@ GROUP BY c.customer_id;`, [customerId])
     async getFilteredCount(filters: any[], userid: number) {
 
         try {
-            const where: string[] = [];
-            const values: any[] = [];
+            const where: string[] = ['cs.role = ?'];
+            const values: any[] = ['Admin'];
 
             filters.forEach((f) => {
                 let value = f.value;
@@ -424,11 +408,34 @@ GROUP BY c.customer_id;`, [customerId])
 
         try {
 
-            const where: string[] = [];
-            const values: any[] = [];
+            const where: string[] = ['cs.role = ?'];
+            const values: any[] = ['Admin'];
 
             filters.forEach((f) => {
                 let value = f.value;
+
+                  const isClientNameFilter = f.column === "CONCAT(cs.first_name, ' ', cs.last_name)";
+
+                if (isClientNameFilter) {
+                    let value = f.value;
+                    if (f.operator === 'contains') value = `%${value}%`;
+                    if (f.operator === 'starts_with') value = `${value}%`;
+                    if (f.operator === 'ends_with') value = `%${value}`;
+
+                    if (f.operator === 'equals') {
+                        where.push(
+                            `(cs.first_name = ? OR cs.last_name = ? OR CONCAT(cs.first_name, ' ', cs.last_name) = ?)`
+                        );
+                        values.push(value, value, value);
+                        return;
+                    }
+
+                    where.push(
+                        `(cs.first_name ${OPERATOR_SQL[f.operator]} ? OR cs.last_name ${OPERATOR_SQL[f.operator]} ? OR CONCAT(cs.first_name, ' ', cs.last_name) ${OPERATOR_SQL[f.operator]} ?)`
+                    );
+                    values.push(value, value, value);
+                    return;
+                }
 
                 if (f.operator === 'isEmpty') {
                     where.push(`(${f.column} IS NULL OR ${f.column} = '')`);
@@ -463,8 +470,7 @@ GROUP BY c.customer_id;`, [customerId])
                     }
 
                     if (f.operator === 'between') {
-                        console.log("modified date start value", f.value)
-                        console.log("modified date end value", f.valueTo)
+                   
 
                         const startDate = `${f.value} 00:00:00`;
                         const endDate = `${f.valueTo} 23:59:59`;
@@ -537,6 +543,7 @@ GROUP BY c.customer_id;`, [customerId])
               LEFT JOIN ab_cities ct ON cs.city = ct.city_id
               LEFT JOIN ab_states st ON cs.state = st.state_id
               LEFT JOIN company cm on cs.comp_id=cm.company_id
+              where cs.role='Admin'
                 GROUP BY cs.customer_id
             
               ORDER BY customer_id DESC
@@ -599,7 +606,6 @@ GROUP BY c.customer_id;`, [customerId])
     async getFilteredCountCustid(filters: any[], compid: number) {
 
 
-        console.log("inside count with  filters cust id method");
 
         try {
             const where: string[] = ['cs.comp_id=?'];
@@ -688,7 +694,6 @@ GROUP BY c.customer_id;`, [customerId])
 
     async findWithFiltersCustId(filters: any[], page: number, limit: number, compid: number) {
 
-        console.log("inside findwith filters cust id method");
         try {
 
             const where: string[] = ['cs.comp_id = ?'];
@@ -730,8 +735,7 @@ GROUP BY c.customer_id;`, [customerId])
                     }
 
                     if (f.operator === 'between') {
-                        console.log("modified date start value", f.value)
-                        console.log("modified date end value", f.valueTo)
+                     
 
                         const startDate = `${f.value} 00:00:00`;
                         const endDate = `${f.valueTo} 23:59:59`;
@@ -789,7 +793,7 @@ GROUP BY c.customer_id;`, [customerId])
             const rows = await this.db.query<number>(
                 `
               SELECT COUNT(*) as total
-              FROM customers
+              FROM customers where role='Admin'
               `
             );
             return rows[0].total;

@@ -42,12 +42,12 @@ export class SubscriptionController {
     ): Promise<any> {
 
         const companyIdNum = Number(companyId);
-        const customerId = Number(id);
+        const comapnyid = Number(id);
 
         const userId = req.user.userId;
         const Transctionimg = files?.transaction_img?.[0];
 
-        return await this.subservice.createSubscription(dto, Transctionimg, companyIdNum, userId, customerId);
+        return await this.subservice.createSubscription(dto, Transctionimg, companyIdNum, userId, comapnyid);
 
     }
 
@@ -86,13 +86,11 @@ export class SubscriptionController {
     }
 
 
-        @Get('get_editsubs/:subid')
+    @Get('get_editsubs/:subid')
     async getSubsById(
         @Param('subid', ParseIntPipe) sbuid: number) {
         return this.subservice.getrealSubByid(sbuid)
     }
-
-
 
 
     @Post('list')
@@ -115,28 +113,26 @@ export class SubscriptionController {
     }
 
 
-      @Post("search_customer")
+    @Post("search_company")
     @UseGuards(AuthGuard('jwt'))
-    async searchByNameCustomer(@Query("search") search: string, @Query('page') page = '1',
-        @Query('limit') limit = '10', @Req() req: any,
+    async searchByNameCustomer(@Query("search") search: string, @Req() req: any,
     ) {
 
         const userid = req.user.userId;
 
-        return this.subservice.searchClient(search, Number(page),
-            Number(limit), userid);
+        return this.subservice.searchCompnay(search, userid);
+
 
     }
 
-        @Get('getsubsbycustomerid/:id')
+    @Get('getsubsbycustomerid/:id')
     async getSubsByCustomerId(
         @Param('id', ParseIntPipe) id: number) {
 
-                    const custid = Number(id);
-                    console.log("cust id is inside getsubscustomerid is",custid)
+        const custid = Number(id);
 
         return this.subservice.getSubforcustomer(custid)
 
     }
-    
+
 }

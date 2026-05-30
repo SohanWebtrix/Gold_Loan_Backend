@@ -358,8 +358,7 @@ export class LedureRepository {
                     }
 
                     if (f.operator === 'between') {
-                        console.log("modified date start value", f.value)
-                        console.log("modified date end value", f.valueTo)
+                     
 
                         const startDate = `${f.value} 00:00:00`;
                         const endDate = `${f.valueTo} 23:59:59`;

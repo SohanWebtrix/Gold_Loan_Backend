@@ -1,7 +1,7 @@
 /* eslint-disable prettier/prettier */
 
 
-import { BadRequestException, HttpException, HttpStatus, Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, HttpException, HttpStatus, Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
 import { AuthRepository } from './auth.repository/auth.repository';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -21,9 +21,23 @@ export class AuthService {
 
     }
 
+
+    async logout(token: string) {
+
+        const decoded: any = this.jwtService.decode(token);
+
+        await this.authRepo.blacklistToken({
+            token,
+            expires_at: new Date(decoded.exp * 1000)
+        });
+
+        return { message: "Logged out successfully" };
+
+    }
+
+
     async generateTokens(user: { id: number; email: string }) {
 
-        console.log("generatetoken called ")
         const accessToken = this.jwtService.sign(
             { sub: user.id, email: user.email },
             { expiresIn: '24h' },
@@ -43,19 +57,17 @@ export class AuthService {
 
     // SERVICE
     async CreateUser(dto: any, userId: number) {
+
         try {
 
-            console.log("create user dto is", dto);
 
             // 1️⃣ Insert into company table
             await this.db.transaction(async (conn) => {
 
                 const companyResult: any = await this.authRepo.insertCompany(dto, userId, conn);
 
-                console.log("comapny result is", companyResult);
 
                 const company_id = companyResult[0].insertId;
-
 
                 // 2️⃣ Insert into customer table with company_id
                 await this.authRepo.insertCustomer(
@@ -82,6 +94,28 @@ export class AuthService {
 
         catch (error) {
             console.error("create prefix error", error);
+
+            if (error.code === "ER_DUP_ENTRY") {
+
+                const msg = error.sqlMessage;
+
+                if (msg.includes("cust_email")) {
+
+                    throw new ConflictException("Email ID already exists");
+
+                }
+
+
+                if (msg.includes("unique_user_name")) {
+
+                    throw new ConflictException("username already exists");
+
+                }
+
+                throw new ConflictException("Duplicate value detected");
+            }
+
+
             throw error;
         }
     }
@@ -91,13 +125,11 @@ export class AuthService {
         try {
             const companyId = Number(dto.company_id);
 
-            console.log("company id inside updateCustomer is", companyId);
 
             if (!companyId) {
                 throw new BadRequestException('company_id is required');
             }
 
-            console.log("customer id is", customerIdNumber);
 
             if (!customerIdNumber) {
                 throw new BadRequestException('customer_id are required');
@@ -112,7 +144,6 @@ export class AuthService {
 
                 // Sync prefix records if prefix array is provided
                 if (Array.isArray(dto.prefix)) {
-                    console.log("inside prefix record exists");
                     await this.authRepo.deletePrefixes(companyId, conn);
                     await this.authRepo.insertprefixbulku(dto.prefix, companyId, conn);
                 }
@@ -127,24 +158,47 @@ export class AuthService {
         } catch (error) {
 
             console.error('UpdateCustomer error', error);
+
+               if (error.code === "ER_DUP_ENTRY") {
+
+                const msg = error.sqlMessage;
+
+                if (msg.includes("cust_email")) {
+
+                    throw new ConflictException("Email ID already exists");
+
+                }
+
+
+                if (msg.includes("unique_user_name")) {
+
+                    throw new ConflictException("username already exists");
+
+                }
+
+                throw new ConflictException("Duplicate value detected");
+            }
+
             throw error;
+
+            
 
         }
     }
 
-    
+
     async getCustomerDetails(customerId: number, headerCompId?: number) {
 
         if (!customerId || Number.isNaN(customerId)) {
             throw new BadRequestException('customer_id is required');
         }
 
-        console.log("customer id is inside customer detals", customerId)
 
         const customer = await this.authRepo.findCustomerWithCompany(customerId);
         if (!customer) {
             throw new BadRequestException('Customer not found');
         }
+
 
         const prefixCompanyId = headerCompId || customer.comp_id;
         const prefixes = await this.authRepo.getPrefixesByCompany(prefixCompanyId);
@@ -160,7 +214,7 @@ export class AuthService {
                 address_line1: customer.address_line1,
                 address_line2: customer.address_line2,
                 state_name: customer.state_name,
-                state: customer.state_id,
+                state: customer.state,
                 city: customer.city,
                 pincode: customer.pincode,
                 cust_phone: customer.cust_phone,
@@ -174,7 +228,8 @@ export class AuthService {
                 company_name: customer.company_name,
                 company_email: customer.company_email,
                 company_mobile: customer.company_mobile,
-                interest:customer.default_interest,
+                comp_address_line1:customer.address,
+                interest: customer.default_interest,
             },
             prefixes,
         };
@@ -212,9 +267,15 @@ export class AuthService {
 
         const user = rows;
 
-        const company_name = await this.authRepo.getCompanyname(user.comp_id);
+        const company = await this.authRepo.getCompanyname(user.comp_id);
 
-        console.log("company name is", company_name);
+        if (!company) {
+            throw new Error("comapny not found")
+        }
+        const comapny_name = company.company_name;
+        const subscription_end_date = company.subscription_end_date;
+
+
 
         // ✅ CHECK STATUS FIRST
         if (user.status !== 'active') {
@@ -247,10 +308,10 @@ export class AuthService {
                 mobile_no: user.cust_phone,
                 role: user.role,
                 profile_path: user.profile_pic_path,
-                subscription_end_date: user.subscription_end_date
-                    ? new Date(user.subscription_end_date).toISOString().split('T')[0]
+                subscription_end_date: subscription_end_date
+                    ? new Date(subscription_end_date).toISOString().split('T')[0]
                     : null,
-                     company_name,
+                comapny_name,
             },
         };
     }
@@ -325,7 +386,6 @@ export class AuthService {
                 );
             });
 
-            console.log("rows are", rows);
 
             if (!rows || rows.affectedRows !== 1) {
                 throw new InternalServerErrorException(
@@ -363,7 +423,6 @@ export class AuthService {
 
             const rows = await this.authRepo.findValidOTPEmail(email);
 
-            console.log("rows are", rows);
 
             if (!rows || rows.length === 0) {
                 throw new BadRequestException('otp expried or invalid');
@@ -400,7 +459,7 @@ export class AuthService {
     async resetPassword(email: string, newPassword: string) {
 
         try {
-            
+
             const rows = await this.authRepo.getPassword(email);
 
 

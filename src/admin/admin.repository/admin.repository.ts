@@ -9,7 +9,7 @@ import { OPERATOR_SQL } from "src/filter/operator.map";
 import * as Sentry from '@sentry/node';
 
 type Admin = {
-    admin_id : number;
+    admin_id: number;
     password: string;
 };
 
@@ -24,7 +24,26 @@ export class AdminRepository {
     constructor(private readonly db: DatabaseService) { }
 
 
-        async updatePass(hash: string, email: string) {
+    async deleteAdmin(adminId: number) {
+
+        try {
+
+            const result = await this.db.query(`update admins set status="inactive" where admin_id=?`, [adminId]);
+            return result;
+
+        }
+
+        catch (error) {
+
+            Sentry.captureException(error);
+            console.error("delete customer error is", error);
+
+        }
+    }
+
+
+
+    async updatePass(hash: string, email: string) {
         try {
             const rows = await this.db.query<ResultSetHeader>(`UPDATE admins SET admin_password = ? WHERE admin_email  = ?`,
                 [hash, email],)
@@ -36,7 +55,7 @@ export class AdminRepository {
     }
 
 
-      async getPassword(email: string): Promise<Admin | null> {
+    async getPassword(email: string): Promise<Admin | null> {
         try {
             const rows = await this.db.query<Admin[]>('SELECT admin_id, admin_password FROM admins WHERE admin_email  = ? limit 1', [email])
             return rows[0] || null;
@@ -46,7 +65,7 @@ export class AdminRepository {
         }
     }
 
-      async insertOtp(conn: any, email: string, hash: string, expiry: Date) {
+    async insertOtp(conn: any, email: string, hash: string, expiry: Date) {
 
         try {
             const db = conn ?? this.db;
@@ -83,48 +102,48 @@ export class AdminRepository {
         }
     }
 
-  async insertBank(
-            data: any,company_id:number,userId:number,
-        ) {
-            try {
-    
-                const payload: any = {
-                    ...data,
-                    company_id:company_id,
-                    created_by: userId
-                };
-    
+    async insertBank(
+        data: any, company_id: number, userId: number,
+    ) {
+        try {
 
-                Object.keys(payload).forEach(key => {
-                    if (payload[key] === undefined) {
-                        payload[key] = null;
-                    }
-                });
-    
-                const columns = Object.keys(payload).join(", ");
-                const placeholders = Object.keys(payload).map(() => "?").join(", ");
-                const values = Object.values(payload);
-    
-                const result = await this.db.query<ResultSetHeader>(
-                    `INSERT INTO bank_account (${columns}) VALUES (${placeholders})`,
-                    values
-                );
-    
-                return result;
-    
-            } catch (error: any) {
-    
-                Sentry.captureException(error);
-    
-                console.error("❌ insert bank  DB error:", error);
-    
-    
-                throw new InternalServerErrorException(
-                    "Failed to create bank"
-                );
-            }
+            const payload: any = {
+                ...data,
+                company_id: company_id,
+                created_by: userId
+            };
+
+
+            Object.keys(payload).forEach(key => {
+                if (payload[key] === undefined) {
+                    payload[key] = null;
+                }
+            });
+
+            const columns = Object.keys(payload).join(", ");
+            const placeholders = Object.keys(payload).map(() => "?").join(", ");
+            const values = Object.values(payload);
+
+            const result = await this.db.query<ResultSetHeader>(
+                `INSERT INTO bank_account (${columns}) VALUES (${placeholders})`,
+                values
+            );
+
+            return result;
+
+        } catch (error: any) {
+
+            Sentry.captureException(error);
+
+            console.error("❌ insert bank  DB error:", error);
+
+
+            throw new InternalServerErrorException(
+                "Failed to create bank"
+            );
         }
-     async findemail(email: string): Promise<AdminId | null> {
+    }
+    async findemail(email: string): Promise<AdminId | null> {
 
         try {
 
@@ -146,75 +165,75 @@ export class AdminRepository {
             throw error;
         }
     }
-        async getFilteredCountSearch(search: string, userid: number): Promise<number> {
-                try {
-                    const rows = await this.db.query<number>(
-                        `SELECT COUNT(*) as total  FROM company 
+    async getFilteredCountSearch(search: string, userid: number): Promise<number> {
+        try {
+            const rows = await this.db.query<number>(
+                `SELECT COUNT(*) as total  FROM company 
                     WHERE company_name LIKE ? `,
-                        [`%${search}%`],
-                    );
-                    return rows[0].total;
-        
-                }
-        
-                catch (error) {
-                    Sentry.captureException(error);
-        
-                    console.error("getTotalCount error is", error)
-                    throw error;
-                }
-            }
+                [`%${search}%`],
+            );
+            return rows[0].total;
+
+        }
+
+        catch (error) {
+            Sentry.captureException(error);
+
+            console.error("getTotalCount error is", error)
+            throw error;
+        }
+    }
 
 
-            async getSearchCompany(page: number, limit: number, search: string, userid: number) {
-                try {
-                    const rows: any = await this.db.query(
-                        `SELECT * FROM company 
+    async getSearchCompany(page: number, limit: number, search: string, userid: number) {
+        try {
+            const rows: any = await this.db.query(
+                `SELECT * FROM company 
                company_name LIKE ? `,
-                        [`%${search}%`],
-                    );
-        
-                    return rows;
-                } catch (error) {
-                    Sentry.captureException(error);
-        
-                    console.error('search bank error', error);
-                    throw error;
-                }
-            }
+                [`%${search}%`],
+            );
 
+            return rows;
+        } catch (error) {
+            Sentry.captureException(error);
 
-        async getBankByid(aid: number) {
-            try {
-                const rows = await this.db.query(
-                    `SELECT * from admins WHERE admin_id = ? LIMIT 1`,
-                    [aid]
-                );
-                return rows;
-            }
-            catch (error) {
-                Sentry.captureException(error);
-    
-                console.error("get bank by id erros is", error)
-                throw error;
-            }
+            console.error('search bank error', error);
+            throw error;
         }
+    }
 
-            async getAdminByid(aid: number) {
-            try {
-                const rows = await this.db.query(
-                    `SELECT * from admins WHERE admin_id = ? LIMIT 1`,
-                    [aid]
-                );
-                return rows;
-            }
-            catch (error) {
-                Sentry.captureException(error);
-    
-                console.error("get admin by id erros is", error)
-                throw error;
-            }
+
+    async getBankByid(aid: number) {
+        try {
+            const rows = await this.db.query(
+                `SELECT * from admins WHERE admin_id = ? LIMIT 1`,
+                [aid]
+            );
+            return rows;
         }
+        catch (error) {
+            Sentry.captureException(error);
+
+            console.error("get bank by id erros is", error)
+            throw error;
+        }
+    }
+
+    async getAdminByid(aid: number) {
+        try {
+            const rows = await this.db.query(
+                `SELECT * from admins WHERE admin_id = ? LIMIT 1`,
+                [aid]
+            );
+            return rows;
+        }
+        catch (error) {
+            Sentry.captureException(error);
+
+            console.error("get admin by id erros is", error)
+            throw error;
+        }
+    }
 
     async insertAdmin(data: any, userid: number) {
 
@@ -296,12 +315,16 @@ export class AdminRepository {
             };
 
 
+            if (updateData.admin_password !== undefined) {
+                updateData.admin_password = updateData.admin_password
+                    ? await bcrypt.hash(updateData.admin_password, 10)
+                    : null;
+            }
 
             // remove undefined
             const filteredData = Object.fromEntries(
                 Object.entries(updateData).filter(([_, value]) => value !== undefined),
             );
-
 
 
             const { modified_date, ...restDto } = filteredData;
@@ -562,12 +585,12 @@ export class AdminRepository {
     }
 
 
-   async getTotalCountbank(company_id:number): Promise<number> {
+    async getTotalCountbank(company_id: number): Promise<number> {
         try {
             const sql = `SELECT COUNT(*) as total FROM bank_account where company_id=?`;
-            const result = await this.db.query(sql,[company_id]);
+            const result = await this.db.query(sql, [company_id]);
             return result[0]?.total ?? 0;
-            
+
         } catch (error) {
 
             console.error("getTotalCount error is", error);
@@ -576,7 +599,7 @@ export class AdminRepository {
         }
     }
 
-      async getFilteredCountbank(filters: any[],companyid:number): Promise<number> {
+    async getFilteredCountbank(filters: any[], companyid: number): Promise<number> {
         try {
             const where: string[] = ['bk.company_id'];
             const values: any[] = [companyid];
@@ -656,7 +679,7 @@ export class AdminRepository {
         }
     }
 
-    async findWithFiltersbank(filters: any[], page: number, limit: number,companyid:number) {
+    async findWithFiltersbank(filters: any[], page: number, limit: number, companyid: number) {
         try {
 
             const where: string[] = ['bk.company_id'];
@@ -737,9 +760,9 @@ export class AdminRepository {
         }
     }
 
-    async findAllbank(page: number, limit: number,companyid:number) {
+    async findAllbank(page: number, limit: number, companyid: number) {
         try {
-            
+
             const safeLimit = Number(limit);
             const safeOffset = Number((page - 1) * limit);
 
@@ -755,7 +778,7 @@ export class AdminRepository {
               LIMIT ${safeLimit} OFFSET ${safeOffset} 
             `;
 
-            const rows = await this.db.query(sql,[companyid]);
+            const rows = await this.db.query(sql, [companyid]);
             return rows;
         }
         catch (error) {

@@ -33,9 +33,7 @@ export class SubscriptionCronService {
         [indiaDate]
       );
 
-      console.log(
-        `Subscriptions updated for ${indiaDate}`
-      );
+   
 
     } catch (error) {
       console.error(

@@ -1,6 +1,6 @@
 /* eslint-disable prettier/prettier */
 
-import { Body, Controller, Get, Headers, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Headers, Param, ParseIntPipe, Post, Put, Req, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './LoginDto';
 import type { Request } from 'express';
@@ -9,6 +9,7 @@ import { AuthGuard } from '@nestjs/passport';
 type JwtRequest = Request & { user: { userId: number } };
 
 @Controller('auth')
+
 export class AuthController {
 
   constructor(private readonly authService: AuthService) {
@@ -18,19 +19,22 @@ export class AuthController {
   @Post('create_customer')
   @UseGuards(AuthGuard('jwt'))
   async CreateUser(@Body() dto: any, @Req() req: JwtRequest) {
+
     const userId = req.user.userId;
+
     return this.authService.CreateUser(dto, userId);
+
   }
 
   @Put('update_customer/:customer_id')
   @UseGuards(AuthGuard('jwt'))
-  async UpdateUser(@Body() dto: any, @Req() req: JwtRequest,@Param('customer_id') customerId: string
+  async UpdateUser(@Body() dto: any, @Req() req: JwtRequest, @Param('customer_id') customerId: string
 
-) {
+  ) {
 
     const customerIdNumber = Number(customerId);
     const userId = req.user.userId;
-    return this.authService.UpdateCustomer(dto,customerIdNumber, userId);
+    return this.authService.UpdateCustomer(dto, customerIdNumber, userId);
 
   }
 
@@ -49,8 +53,8 @@ export class AuthController {
 
   }
 
-   @Post('create_admin')
-  async CreateAdmin(@Body() dto:any) {
+  @Post('create_admin')
+  async CreateAdmin(@Body() dto: any) {
     return this.authService.CreateAdmin(dto);
   }
 
@@ -58,7 +62,7 @@ export class AuthController {
   async LoginByEmail(
     @Body() body: LoginDto,
   ) {
-    
+
     const result = await this.authService.loginWithEmail(
       body.login_id,
       body.validPass,
@@ -74,11 +78,11 @@ export class AuthController {
     };
   }
 
-    @Post('verifyAdmin')
+  @Post('verifyAdmin')
   async LoginById(
     @Body() body: LoginDto,
   ) {
-    
+
     const result = await this.authService.loginEmailAdmin(
       body.login_id,
       body.validPass,
@@ -92,7 +96,7 @@ export class AuthController {
       AccessTokenss,
       RefreshToken: result.refreshToken,
     };
-    
+
   }
 
 
@@ -102,6 +106,8 @@ export class AuthController {
     return this.authService.forgotPassword(email);
 
   }
+
+
 
   @Post('verify_otp_email')
   async verifyOtpEmail(
@@ -119,9 +125,23 @@ export class AuthController {
   async resetPassword(
     @Body() body: { email: string; password: string },
   ) {
-    
+
     return this.authService.resetPassword(body.email, body.password);
 
   }
+
+  @Post('logout')
+  logout(@Req() req) {
+
+    const token = req.headers.authorization?.split(" ")[1];
+
+    if (!token) {
+      throw new BadRequestException("Token missing");
+    }
+
+    return this.authService.logout(token);
+
+  }
+
 
 }

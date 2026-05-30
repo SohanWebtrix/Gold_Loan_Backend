@@ -347,6 +347,57 @@ export class LoanRepository {
 
     }
 
+        async getAccountBalances(
+        accountIds: number[],
+        conn: any
+    ) {
+
+        if (!accountIds.length) {
+            return [];
+        }
+
+        const placeholders =
+            accountIds.map(() => '?').join(',');
+
+        const [rows]: any =
+            await conn.query(
+                `
+      SELECT
+        ba.id AS account_id,
+        COALESCE(
+          le.balance_after,
+          ba.opening_balance
+        ) AS balance
+      FROM bank_account ba
+
+      LEFT JOIN (
+        SELECT l1.account_id,
+               l1.balance_after
+        FROM ledger_entries l1
+        INNER JOIN (
+          SELECT
+            account_id,
+            MAX(entry_id) AS max_entry_id
+          FROM ledger_entries
+          WHERE type = 'account'
+          AND account_id IN (${placeholders})
+          GROUP BY account_id
+        ) latest
+          ON l1.entry_id =
+             latest.max_entry_id
+      ) le
+        ON le.account_id = ba.id
+
+      WHERE ba.id IN (${placeholders})
+      `,
+                [...accountIds, ...accountIds]
+            );
+
+        return rows;
+
+    }
+
+
     async getLatestAccountBalance(accountId: number, conn: any) {
 
         try {
@@ -390,6 +441,7 @@ export class LoanRepository {
     async getLatestLoanBalance(loanId: any, conn: any) {
 
         try {
+
             const [rows]: any = await conn.query(
                 `
         SELECT balance_after
@@ -402,11 +454,15 @@ export class LoanRepository {
                 [loanId]
             );
 
-            if (rows.length > 0) {
+            if (rows.length > 0) 
+            {
+
                 return Number(rows[0].balance_after);
+                
             }
 
             return 0;
+
         }
         catch (error) {
             Sentry.captureException(error);
@@ -538,7 +594,6 @@ export class LoanRepository {
     ) {
         try {
 
-            console.log("data in insertLoan is", data);
 
             const payload: any = {
                 ...data,
@@ -561,10 +616,7 @@ export class LoanRepository {
             const placeholders = Object.keys(payload).map(() => "?").join(", ");
             const values = Object.values(payload);
 
-            console.log(payload.loan_document_number);
-            console.log(payload);
-            console.log("columns", columns);
-            console.log("values", values);
+          
 
 
             const result = await this.db.query<ResultSetHeader>(
@@ -834,7 +886,6 @@ export class LoanRepository {
 
 
     async deleteLoan(id: number) {
-        console.log("inside delete loan repository")
         try {
             const rows = await this.db.query<ResultSetHeader>('delete from loans where loan_id=? limit 1', [id]);
             return rows;
@@ -914,8 +965,7 @@ export class LoanRepository {
                     }
 
                     if (f.operator === 'between') {
-                        console.log("modified date start value", f.value)
-                        console.log("modified date end value", f.valueTo)
+                     
 
                         const startDate = `${f.value} 00:00:00`;
                         const endDate = `${f.valueTo} 23:59:59`;
@@ -1046,8 +1096,7 @@ export class LoanRepository {
                     }
 
                     if (f.operator === 'between') {
-                        console.log("modified date start value", f.value)
-                        console.log("modified date end value", f.valueTo)
+                        
 
                         const startDate = `${f.value} 00:00:00`;
                         const endDate = `${f.valueTo} 23:59:59`;
@@ -1848,7 +1897,6 @@ WHERE m.loan_id = ?
 
             values.push(goldItemId);
 
-            console.log("sql for updateMortgaged item is", sql);
 
             const [result] = await db.query(
                 sql,
@@ -1906,7 +1954,6 @@ WHERE m.loan_id = ?
 
             const { modified_date, ...restDto } = filteredData;
 
-            console.log("filtered date in update monitoring is", restDto);
 
             const fields = Object.keys(restDto);
 

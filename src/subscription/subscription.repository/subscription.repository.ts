@@ -9,8 +9,6 @@ import { DateTime } from "luxon";
 import * as bcrypt from 'bcrypt';
 
 
-
-
 @Injectable()
 export class SubscriptionRepository {
 
@@ -18,13 +16,27 @@ export class SubscriptionRepository {
 
   }
 
+  async getSearchCompany(search: string, userid: number) {
 
-  async getSearchClient(page: number, limit: number, search: string, userid: number) {
     try {
 
       const rows: any = await this.db.query(
-        `SELECT customer_id,concat(first_name,' ',last_name) as full_name FROM customers 
-           WHERE CONCAT(first_name, ' ', last_name) LIKE ?`,
+        `
+  SELECT 
+    c.company_id,
+    c.company_name,
+    concat(cu.first_name,' ',cu.last_name) as first_customer_name
+  FROM company c
+  LEFT JOIN customers cu 
+    ON cu.customer_id = (
+      SELECT customer_id
+      FROM customers
+      WHERE company_id = c.company_id
+      ORDER BY customer_id ASC
+      LIMIT 1
+    )
+  WHERE c.company_name LIKE ?
+  `,
         [`%${search}%`],
       );
 
@@ -64,10 +76,10 @@ export class SubscriptionRepository {
 
 
 
-async getSubDetails(custid: number) {
-  try {
-    const rows = await this.db.query(
-      `
+  async getSubDetails(custid: number) {
+    try {
+      const rows = await this.db.query(
+        `
       SELECT 
         sb.*,
         CONCAT(cs.first_name, ' ', cs.last_name) AS full_name,
@@ -77,17 +89,17 @@ async getSubDetails(custid: number) {
         ON sb.customer_id = cs.customer_id
       WHERE cs.customer_id = ?
       `,
-      [custid]
-    );
+        [custid]
+      );
 
-    return rows;
-  } catch (error) {
-    Sentry.captureException(error);
+      return rows;
+    } catch (error) {
+      Sentry.captureException(error);
 
-    console.error("get subscription error is", error);
-    throw error;
+      console.error("get subscription error is", error);
+      throw error;
+    }
   }
-}
 
 
   async getSubDetailsforcustomer(id: number) {
@@ -98,15 +110,14 @@ async getSubDetails(custid: number) {
                  `, [id]
       );
 
-      console.log("customer is",customer);
 
       const customerId = customer[0]?.customer_id;
-       const subscriptionlist: any = await this.db.query(`select * from subscription_table where customer_id=?`,[customerId]);
+      const subscriptionlist: any = await this.db.query(`select * from subscription_table where customer_id=?`, [customerId]);
 
-       return{
+      return {
         customer,
         subscriptionlist,
-       }
+      }
 
     }
     catch (error) {
@@ -114,13 +125,13 @@ async getSubDetails(custid: number) {
       Sentry.captureException(error);
 
       console.error("get subscription error is", error);
-      
+
       throw error;
     }
   }
 
 
-  
+
   async getSubsByid(subid: number) {
     try {
       const rows = await this.db.query(
@@ -144,14 +155,12 @@ async getSubDetails(custid: number) {
 
       const payload: Record<string, any> = { ...data };
 
-      console.log("payload in updatSubs is", payload);
 
       const filteredPayload = Object.fromEntries(
         Object.entries(payload).filter(([, value]) => value !== undefined && value !== 'undefined'
         ),
       );
 
-      console.log("filtered payload is", filteredPayload);
 
       if (!Object.keys(filteredPayload).length) {
         throw new Error('Nothing to update');
@@ -184,7 +193,7 @@ async getSubDetails(custid: number) {
   }
 
 
-  async updateCustomer(
+  async updateCompany(
     data: any,
     conn?: any,
   ) {
@@ -194,14 +203,14 @@ async getSubDetails(custid: number) {
 
       return db.query(
         `
-        UPDATE customers
+        UPDATE company
         SET
           subscription_end_date = ?
-        WHERE customer_id = ?
+        WHERE company_id = ?
         `,
         [
           data.subscription_end_date,
-          data.customer_id,
+          data.comapnyid,
         ]
       );
     }
@@ -255,19 +264,18 @@ async getSubDetails(custid: number) {
   async insertSubscription(
     data: any,
     userId: number,
-    customerId: number,
+    company_id: number,
     conn: any
   ) {
     try {
 
       const db = conn ?? this.db;
 
-      console.log("data in insertLoan is", data);
 
       const payload: any = {
         ...data,
         created_by: userId,
-        customer_id: customerId
+        company_id: company_id
       };
 
 
@@ -288,10 +296,6 @@ async getSubDetails(custid: number) {
       const placeholders = Object.keys(payload).map(() => "?").join(", ");
       const values = Object.values(payload);
 
-      console.log(payload.loan_document_number);
-      console.log(payload);
-      console.log("columns", columns);
-      console.log("values", values);
 
 
       const [result] = await db.query(
@@ -365,13 +369,10 @@ async getSubDetails(custid: number) {
       const sql = `
       SELECT
         sb.*,
-        cs.customer_id,
-        cs.first_name,
-        cs.last_name,
-        cs.cust_name
+        cm.company_name
       FROM subscription_table sb
-      LEFT JOIN customers cs
-        ON sb.customer_id = cs.customer_id
+       LEFT JOIN company cm 
+        ON sb.company_id  = cm.company_id 
       ORDER BY sb.sub_id  DESC
       LIMIT ${safeLimit}
       OFFSET ${safeOffset}
@@ -505,13 +506,10 @@ async getSubDetails(custid: number) {
       const sql = `
       SELECT
         sb.*,
-        cs.customer_id,
-        cs.first_name,
-        cs.last_name,
-        cs.cust_name
+        cm.company_name
       FROM subscription_table sb
-      LEFT JOIN customers cs
-        ON sb.customer_id = cs.customer_id
+       LEFT JOIN company cm 
+        ON sb.company_id  = cm.company_id 
       WHERE ${where.join(' AND ')}
       ORDER BY sb.sub_id DESC
       LIMIT ${safeLimit}
@@ -630,8 +628,8 @@ async getSubDetails(custid: number) {
       const sql = `
       SELECT COUNT(*) as total
       FROM subscription_table sb
-      LEFT JOIN customers cs
-        ON sb.customer_id = cs.customer_id
+         LEFT JOIN company cm 
+        ON sb.company_id  = cm.company_id 
       WHERE ${where.join(' AND ')}
     `;
 

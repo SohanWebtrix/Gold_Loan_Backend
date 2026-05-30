@@ -158,8 +158,7 @@ export class TransactionRepository {
             [loanId, paymentDate]
         );
 
-        console.log("previous rows are", previousRow);
-        console.log("rows are for", rows);
+      
 
         let runningAccrued =
             Number(previousRow?.[0]?.accrued_interest || 0);
@@ -335,7 +334,6 @@ export class TransactionRepository {
                 [loanId]
             );
 
-            console.log("row data for getLatestDailyInterest is", rows);
             return Number(
                 rows?.[0]?.accrued_interest || 0
             );
@@ -626,7 +624,7 @@ LIMIT 1
         }
     }
 
-     async getTransactionPayments(transactionId: number) {
+    async getTransactionPayments(transactionId: number) {
         try {
 
             const TransactionRows: any[] = await this.db.query(
@@ -857,8 +855,7 @@ LIMIT 1
                     }
 
                     if (f.operator === 'between') {
-                        console.log("modified date start value", f.value)
-                        console.log("modified date end value", f.valueTo)
+                        
 
                         const startDate = `${f.value} 00:00:00`;
                         const endDate = `${f.valueTo} 23:59:59`;
@@ -901,18 +898,17 @@ LIMIT 1
             LIMIT ${safeLimit} OFFSET ${safeOffset}
           `;
 
-                  console.log("sql in findWithFIlters in transaction repository is",sql);
-                  console.log("value inside findWithFIlters",values)
+      
 
             const rows = await this.db.query(sql, values);
 
- return rows.map((row) => ({
+            return rows.map((row) => ({
                 ...row,
                 payment_types: row.payment_types
                     ? row.payment_types.split(",")
                     : []
             }));
-        
+
         }
         catch (error) {
 
@@ -967,7 +963,7 @@ LIMIT 1
 
         catch (error) {
             Sentry.captureException(error);
-        
+
             console.error("findAll is", error)
             throw error
         }
@@ -1477,8 +1473,8 @@ SELECT
   t.interest_balance,
   t.receipt_no,
   t.paid_amount,
-  t.payment_method,
   t.transaction_ref_no,
+  t.topup_date,
   CONCAT_WS(' ', c.first_name, c.last_name) AS client_name,
   c.client_code,
   c.caste,
@@ -1535,6 +1531,57 @@ AND t.company_id = ?
             console.error('getTransactionReceipt error', error);
             throw error;
         }
+    }
+
+
+    async getAccountBalances(
+        accountIds: number[],
+        conn: any
+    ) {
+
+        if (!accountIds.length) {
+            return [];
+        }
+
+        const placeholders =
+            accountIds.map(() => '?').join(',');
+
+        const [rows]: any =
+            await conn.query(
+                `
+      SELECT
+        ba.id AS account_id,
+        COALESCE(
+          le.balance_after,
+          ba.opening_balance
+        ) AS balance
+      FROM bank_account ba
+
+      LEFT JOIN (
+        SELECT l1.account_id,
+               l1.balance_after
+        FROM ledger_entries l1
+        INNER JOIN (
+          SELECT
+            account_id,
+            MAX(entry_id) AS max_entry_id
+          FROM ledger_entries
+          WHERE type = 'account'
+          AND account_id IN (${placeholders})
+          GROUP BY account_id
+        ) latest
+          ON l1.entry_id =
+             latest.max_entry_id
+      ) le
+        ON le.account_id = ba.id
+
+      WHERE ba.id IN (${placeholders})
+      `,
+                [...accountIds, ...accountIds]
+            );
+
+        return rows;
+
     }
 
 }

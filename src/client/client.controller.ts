@@ -63,17 +63,7 @@ async searchCities(
     async searchStates(@Query('search') search?: string) {
         return this.clientService.searchStates(search)
     }
-
-    // @Put('updated_client/:id')
-    // @UseGuards(AuthGuard('jwt'))
-    // async updateUser(@Param('id') id: number, @Body() dto: UpdateClientDto, @Req() req: any,) {
-    //     const userId = req.user.userId;
-
-    //     console.log("dto in updated client controller is",dto);
-    //     return this.clientService.updateUsers(id, dto, userId);
-    // }
-
-
+    
 
     @Post('create_client')
     @UseGuards(AuthGuard('jwt'))
@@ -130,6 +120,7 @@ async searchCities(
             filters,
             companyIdNum
         );
+        
     }
 
 

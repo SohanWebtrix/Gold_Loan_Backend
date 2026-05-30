@@ -138,7 +138,6 @@ export class TransactionsService {
     userId: number,
     companyId: number,
   ) {
-    let folderPath: string | null = null;
     let transactionId: number | null = null;
     let uploadedPaths: string[] = [];
 
@@ -165,7 +164,25 @@ export class TransactionsService {
       // STEP 1 FETCH LOAN
       // =====================================
 
-      const loan = await this.transactionrepo.getLoanById(dto.loan_id);
+      // const loan = await this.transactionrepo.getLoanById(dto.loan_id);
+
+      const [
+  loan,
+  lastTxn,
+  dailyInterestRow
+] = await Promise.all([
+  this.transactionrepo.getLoanById(
+    dto.loan_id
+  ),
+  this.transactionrepo.getLastTransaction(
+    dto.loan_id
+  ),
+  this.transactionrepo.getInterestAsOfDate(
+    dto.loan_id,
+    dto.transaction_date
+  )
+]);
+
 
       if (!loan) {
         throw new BadRequestException('Loan not found');
@@ -175,8 +192,8 @@ export class TransactionsService {
       // STEP 2 FETCH LAST TRANSACTION
       // =====================================
 
-      const lastTxn =
-        await this.transactionrepo.getLastTransaction(dto.loan_id);
+      // const lastTxn =
+      //   await this.transactionrepo.getLastTransaction(dto.loan_id);
 
       // =====================================
       // STEP 3 OPENING BALANCE
@@ -191,11 +208,11 @@ export class TransactionsService {
       // let accruedInterest =
       //   Number(loan.accrued_interest);
 
-      const dailyInterestRow =
-        await this.transactionrepo.getInterestAsOfDate(
-          dto.loan_id,
-          dto.transaction_date
-        );
+      // const dailyInterestRow =
+      //   await this.transactionrepo.getInterestAsOfDate(
+      //     dto.loan_id,
+      //     dto.transaction_date
+      //   );
 
       let accruedInterest =
         Number(
@@ -214,9 +231,7 @@ export class TransactionsService {
       let interestPaid = 0;
       let overduePaid = 0;
       let topupAmount = 0;
-      let topupInterest = 0;
 
-      const totalPaid = Number(dto.paid_amount || 0);
 
       const previousTotalBalance =
         Number(loan.total_amount || 0);
@@ -249,6 +264,7 @@ export class TransactionsService {
             'Interest exceeds payable interest',
           );
         }
+
 
         accruedInterest -= interestPaid;
 
@@ -422,7 +438,6 @@ export class TransactionsService {
             folderPathtransaction
           );
 
-          console.log("img path is ", imgPath)
 
           if (imgPath) {
             uploadedPaths.push(imgPath);
@@ -438,6 +453,12 @@ export class TransactionsService {
       );
 
 
+      const accountIds =
+        disbursementPayments.map(
+          (p) => Number(p.account_id)
+        );
+
+
 
       // =====================================
       // STEP 5 INSERT TRANSACTION ONLY
@@ -445,7 +466,6 @@ export class TransactionsService {
       const result =
         await this.db.transaction(async (conn) => {
           dto.receipt_no = await this.transactionrepo.generateNumber(companyId, "TRANSACTION", conn);
-
 
 
           const insertResult =
@@ -544,7 +564,6 @@ export class TransactionsService {
           }
 
 
-          console.log("latest daily ineterst is", latestInterest);
 
           // only update status in loan table
           await this.transactionrepo.updateLoanBalance(
@@ -582,14 +601,22 @@ export class TransactionsService {
               conn
             );
 
-          const latestAccountBalance: any =
-            await this.transactionrepo.getLatestAccountBalance(
-              dto.account_type,
-              conn
-            );
 
           const latestInterestBalance =
             await this.transactionrepo.getLatestInterestBalance(dto.loan_id, conn);
+
+
+          const balances =
+            await this.transactionrepo
+              .getAccountBalances(accountIds, conn);
+
+          const accountBalanceMap =
+            new Map<number, number>(
+              balances.map((b) => [
+                Number(b.account_id),
+                Number(b.balance),
+              ])
+            );
 
           if (dto.transaction_type === 'TOPUP') {
 
@@ -611,7 +638,9 @@ export class TransactionsService {
               conn,
               {
                 type: 'debit'
-              }
+              },
+              accountBalanceMap
+
             );
             // SINGLE LOAN ENTRY
             const loanBalanceAfter =
@@ -767,7 +796,9 @@ export class TransactionsService {
               conn,
               {
                 type: 'credit'
-              }
+              },
+              accountBalanceMap
+
             );
 
 
@@ -816,7 +847,9 @@ export class TransactionsService {
               conn,
               {
                 type: 'credit'
-              }
+              },
+              accountBalanceMap
+
             );
 
             // await this.transactionrepo.updateBankBalance(dto.account_type,accountBalanceAfter,conn)
@@ -864,7 +897,8 @@ export class TransactionsService {
               conn,
               {
                 type: 'credit'
-              }
+              },
+              accountBalanceMap
             );
 
             // await this.transactionrepo.updateBankBalance(dto.account_type,accountBalanceAfter,conn)
@@ -874,7 +908,6 @@ export class TransactionsService {
           return insertId;
         });
 
-      console.log("result is", result);
       transactionId = result;
 
 
@@ -944,8 +977,6 @@ export class TransactionsService {
   }
 
 
-
-
   private async createMultipleAccountEntries(
     payments: any[],
     insertId: number,
@@ -957,7 +988,9 @@ export class TransactionsService {
     conn: any,
     options: {
       type: 'credit' | 'debit';
-    }
+    },
+    accountBalanceMap: Map<number, number>
+
   ) {
 
     for (const payment of payments) {
@@ -968,12 +1001,8 @@ export class TransactionsService {
       const paidAmount =
         Number(payment.amount || 0);
 
-      const latestAccountBalance: any =
-        await this.transactionrepo
-          .getLatestAccountBalance(
-            accountId,
-            conn
-          );
+      const currentBalance =
+        accountBalanceMap.get(accountId) || 0;
 
       let accountBalanceAfter = 0;
       let debit = 0;
@@ -981,16 +1010,16 @@ export class TransactionsService {
 
       if (options.type === 'credit') {
 
+
         accountBalanceAfter =
-          latestAccountBalance +
-          paidAmount;
+          currentBalance + paidAmount;
 
         credit = paidAmount;
 
       } else {
 
         // debit case (TOPUP)
-        if (paidAmount > latestAccountBalance) {
+        if (paidAmount > currentBalance) {
 
           throw new BadRequestException(
             `Insufficient balance in account ${accountId}`
@@ -998,11 +1027,16 @@ export class TransactionsService {
         }
 
         accountBalanceAfter =
-          latestAccountBalance -
-          paidAmount;
+          currentBalance - paidAmount;
 
         debit = paidAmount;
       }
+
+      // update local memory balance
+      accountBalanceMap.set(
+        accountId,
+        accountBalanceAfter
+      );
 
       await this.transactionrepo
         .updateBankBalance(
@@ -1365,8 +1399,8 @@ export class TransactionsService {
             transaction_id: row.transaction_id,
             transaction_type: row.transaction_type,
             transaction_date: row.transaction_date,
+            topup_date: row.topup_date,
             paid_amount: Math.round(row.paid_amount),
-            payment_method: row.payment_method,
             company_name: row.company_name,
             client_name: row.client_name,
             client_code: row.client_code,

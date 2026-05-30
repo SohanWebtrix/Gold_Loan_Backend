@@ -26,47 +26,46 @@ export class SubscriptionService {
 
 
 
-  
-  async searchClient(search: string, page: number,
-    limit: number, userid: number) {
+
+  async searchCompnay(search: string, userid: number) {
 
     try {
 
-      const totalRecords = await this.subRepo.getFilteredCountSearch(search, userid)
+      // const totalRecords = await this.subRepo.getFilteredCountSearch(search, userid)
 
-      console.log("total Records are", totalRecords)
+      // console.log("total Records are", totalRecords)
 
-      const totalPages = Math.ceil(totalRecords / limit);
+      // const totalPages = Math.ceil(totalRecords / limit);
 
-      const data = await this.subRepo.getSearchClient(page, limit, search, userid);
-
-
-      const start = totalRecords === 0 ? 0 : (page - 1) * limit + 1;
-      const end = Math.min(page * limit, totalRecords);
+      const data = await this.subRepo.getSearchCompany(search, userid);
 
 
-      console.log("total pages are ", totalPages)
-      console.log("end is", end)
+      // const start = totalRecords === 0 ? 0 : (page - 1) * limit + 1;
+      // const end = Math.min(page * limit, totalRecords);
+
+
+      // console.log("total pages are ", totalPages)
+      // console.log("end is", end)
 
 
       if (!data || data.length === 0) {
         return {
-          message: "no Client found",
+          message: "no Company found",
           data: [],
         }
       }
 
       return {
         success: true,
-        message: "Client fetched succesfully",
-        currentPage: page,
-        limit,
-        start,
-        end: end,
-        totalRecords: totalRecords,
-        totalPages: totalPages,
-        nextPage: page < totalPages ? page + 1 : null,
-        previousPage: page > 1 ? page - 1 : null,
+        message: "Company fetched succesfully",
+        // currentPage: page,
+        // limit,
+        // start,
+        // end: end,
+        // totalRecords: totalRecords,
+        // totalPages: totalPages,
+        // nextPage: page < totalPages ? page + 1 : null,
+        // previousPage: page > 1 ? page - 1 : null,
         data
       }
     } catch (error) {
@@ -78,53 +77,53 @@ export class SubscriptionService {
 
 
 
-async getSubByid(custid: number) {
+  async getSubByid(custid: number) {
 
-  try {
-    if (!custid) {
-      throw new BadRequestException("customer id is missing");
-    }
+    try {
+      if (!custid) {
+        throw new BadRequestException("customer id is missing");
+      }
 
-    const data = await this.subRepo.getSubDetails(custid);
+      const data = await this.subRepo.getSubDetails(custid);
 
-    if (!data?.length) {
-      return {
-        message: "customer not found",
-        customer: null,
-        subscription: null,
+      if (!data?.length) {
+        return {
+          message: "customer not found",
+          customer: null,
+          subscription: null,
+        };
+      }
+
+      const firstitem = data[0];
+
+      const customer = {
+        customer_id: firstitem.customer_table_id,
+        full_name: firstitem.full_name,
       };
+
+      // remove customer fields from each subscription
+      const subscriptions = data.map(
+        ({
+          full_name,
+          customer_table_id,
+          ...subscription
+        }) => subscription
+      );
+
+      return {
+        success: true,
+        message: "subscription details fetched succesfully",
+        customer,
+
+        // if no subscription exists => null
+        subscription: subscriptions[0]?.sub_id
+          ? subscriptions
+          : null,
+      };
+    } catch (error) {
+      throw error;
     }
-
-    const firstitem = data[0];
-
-    const customer = {
-      customer_id: firstitem.customer_table_id,
-      full_name: firstitem.full_name,
-    };
-
-    // remove customer fields from each subscription
-    const subscriptions = data.map(
-      ({
-        full_name,
-        customer_table_id,
-        ...subscription
-      }) => subscription
-    );
-
-    console.log("subscriptions is",subscriptions);
-    return {
-      message: "subscription details fetched succesfully",
-      customer,
-
-      // if no subscription exists => null
-      subscription: subscriptions[0]?.sub_id
-        ? subscriptions
-        : null,
-    };
-  } catch (error) {
-    throw error;
   }
-}
 
 
   async getSubforcustomer(id: number) {
@@ -151,7 +150,7 @@ async getSubByid(custid: number) {
     }
   }
 
-    async getrealSubByid(id: number) {
+  async getrealSubByid(id: number) {
 
     try {
 
@@ -162,6 +161,7 @@ async getSubByid(custid: number) {
       const data = await this.subRepo.getSubsByid(id);
 
       return {
+        success: true,
         message: "subscription details fetched succesfully"
         , data
       }
@@ -199,7 +199,6 @@ async getSubByid(custid: number) {
         throw new BadRequestException('subscription not found');
       }
 
-      console.log("existing subscription is", existingSubs);
 
       const folderPath = `uploads/subscription/${subid}`;
       await fs.promises.mkdir(folderPath, { recursive: true });
@@ -214,7 +213,6 @@ async getSubByid(custid: number) {
         dto.remove_profile === 'true',
       );
 
-      console.log("profile inside customer service is", profile);
 
       if (profile.filePath) {
 
@@ -235,21 +233,20 @@ async getSubByid(custid: number) {
       const payload = { ...dto, ...fileUpdates };
 
 
-
-
       const result = await this.db.transaction(async (conn) => {
 
         const updateResult = await this.subRepo.updateSubs(subid, payload, userId, conn);
 
 
         // 2️⃣ Insert into customer table with company_id
-        await this.subRepo.updateCustomer(
+        await this.subRepo.updateCompany(
           { subscription_end_date: dto.subscription_end_date, customer_id: dto.customer_id }, conn
         );
 
         return updateResult;
 
       })
+
       if (!result || result.affectedRows === 0) {
         throw new Error('Failed to update subscription');
       }
@@ -264,6 +261,7 @@ async getSubByid(custid: number) {
       );
 
       return {
+        success: true,
         message: 'subscription updated successfully',
         data: result,
       };
@@ -292,7 +290,7 @@ async getSubByid(custid: number) {
     Transctionimg: MulterFile | undefined,
     companyId: number,
     userId: number,
-    customerId: number
+    comapnyid: number
 
   ): Promise<any> {
     let folderPath: string | null = null;
@@ -302,13 +300,13 @@ async getSubByid(custid: number) {
 
       const result = await this.db.transaction(async (conn) => {
 
-        const subResult: any = await this.subRepo.insertSubscription(dto, userId, customerId, conn);
+        const subResult: any = await this.subRepo.insertSubscription(dto, userId, comapnyid, conn);
 
         const subid = subResult.insertId;
 
         // 2️⃣ Insert into customer table with company_id
-        await this.subRepo.updateCustomer(
-          { subscription_end_date: dto.subscription_end_date, customerId }, conn
+        await this.subRepo.updateCompany(
+          { subscription_end_date: dto.subscription_end_date, comapnyid }, conn
         );
 
         return subid;
@@ -338,6 +336,7 @@ async getSubByid(custid: number) {
       }
 
       return {
+        success: true,
         message: 'subscription created successfully',
       };
     } catch (error) {
@@ -372,15 +371,12 @@ async getSubByid(custid: number) {
     removeFile?: boolean,
   ): Promise<{ dbPath?: string | null; filePath?: string | null; oldFileToDelete?: string | null }> {
 
-    console.log("rmeove file in replace staff file is", removeFile);
 
     if (removeFile) {
-      console.log("inside remove file in replaceStaffFile");
 
       return { dbPath: null, oldFileToDelete: oldFilePath ?? null };
     }
 
-    console.log("folder path inside replace staff file is", folderPath);
 
     if (!file) {
       return {};
@@ -397,8 +393,7 @@ async getSubByid(custid: number) {
     const filePath = path.join(folderPath, fileName);
     const dbPath = `/${folderPath}/${fileName}`;
 
-    console.log("dbPath is in replaceStaff is", dbPath);
-    console.log("file path is", filePath);
+
 
     await fs.promises.writeFile(filePath, file.buffer);
 
@@ -506,6 +501,7 @@ async getSubByid(custid: number) {
       );
 
       return {
+        success: true,
         currentPage: page,
         limit,
         start,

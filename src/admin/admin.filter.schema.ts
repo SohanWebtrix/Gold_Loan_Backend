@@ -2,36 +2,50 @@
 
 export const ADMIN_FILTER_SCHEMA = {
 
-  first_name: {
+  firstname: {
     column: 'ad.first_name',
     type: 'text',
     operators: ['equals', 'contains', 'starts_with', 'ends_with', 'isEmpty', 'is_not_empty'],
   },
 
-  last_name: {
+  lastname: {
     column: 'ad.last_name',
     type: 'text',
     operators: ['equals', 'contains', 'starts_with', 'ends_with', 'isEmpty', 'is_not_empty'],
   },
 
-  user_name: {
+  id:{
+       column: 'ad.admin_id',
+    type: 'text',
+    operators: ['equals', 'contains', 'starts_with', 'ends_with', 'isEmpty', 'is_not_empty'],
+  },
+
+  username: {
     column: 'ad.user_name',
     type: 'text',
     operators: ['equals', 'contains', 'starts_with', 'ends_with', 'isEmpty', 'is_not_empty'],
   },
 
-  admin_email: {
+  email: {
     column: 'ad.admin_email',
     type: 'text',
     operators: ['equals', 'contains', 'starts_with', 'ends_with', 'isEmpty', 'is_not_empty'],
   },
 
-  admin_phone: {
+  phone: {
     column: 'ad.admin_phone',
     type: 'text',
     operators: ['equals', 'contains', 'starts_with', 'ends_with', 'isEmpty', 'is_not_empty'],
   },
 
+
+    status: {
+    column: 'ad.status',
+    type: 'text',
+    operators: ['equals', 'contains', 'starts_with', 'ends_with', 'isEmpty', 'is_not_empty'],
+  },
+
+  
   created_date: {
     column: 'ad.created_date',
     type: 'date',
