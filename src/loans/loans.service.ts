@@ -1020,7 +1020,7 @@ export class LoansService {
               type: "loan",
               entry_date: istNow,
               transaction_date:
-                latestTransactionDate,
+                transactionDateTime,
             },
             conn
           );
@@ -1661,7 +1661,7 @@ export class LoansService {
                 type: "loan",
                 entry_date: istNow,
                 transaction_date:
-                  latestTransactionDate,
+                  transactionDateTime,
               },
               conn
             );

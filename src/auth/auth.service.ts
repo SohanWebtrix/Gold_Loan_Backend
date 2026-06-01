@@ -229,7 +229,10 @@ export class AuthService {
                     cust_phone: customer.cust_phone,
                     cust_email: customer.cust_email,
                     user_name: customer.user_name,
-                    landmark: customer.landmark
+                    landmark: customer.landmark,
+                    total_clients:customer.total_clients,
+                    total_loans:customer.total_loans,
+                    active_loans:customer.active_loans,
                 },
 
                 company: {

@@ -62,9 +62,12 @@ export type CustomerWithCompany = {
     company_name: string | null;
     company_email: string | null;
     company_mobile: string | null;
-    address:string|null;
-    default_interest:string|null;
+    address: string | null;
+    default_interest: string | null;
     state_name: string | null;
+    total_clients: number | null,
+    total_loans: number | null,
+    active_loans: number | null,
 };
 
 export type PrefixItem = {
@@ -93,56 +96,56 @@ export class AuthRepository {
     }
 
 
-     async blacklistToken(data) {
+    async blacklistToken(data) {
 
-    const query = `
+        const query = `
     INSERT INTO token_blacklist (token, expires_at)
     VALUES (?, ?)
   `;
 
-    await this.db.query(query, [data.token, data.expires_at]);
-  }
+        await this.db.query(query, [data.token, data.expires_at]);
+    }
 
 
     async isTokenBlacklisted(token: string): Promise<boolean> {
 
-    if (!token) {
-      return false;
-    }
+        if (!token) {
+            return false;
+        }
 
-    const query = `
+        const query = `
     SELECT id FROM token_blacklist
     WHERE token = ?
     LIMIT 1
   `;
 
-    const rows: any = await this.db.query(query, [token]);
+        const rows: any = await this.db.query(query, [token]);
 
-    return Array.isArray(rows) && rows.length > 0;
-  }
+        return Array.isArray(rows) && rows.length > 0;
+    }
 
 
-  async deleteExpiredTokens() {
+    async deleteExpiredTokens() {
 
-    const query = `
+        const query = `
     DELETE FROM token_blacklist
     WHERE expires_at < NOW()
   `;
 
-    await this.db.query(query);
+        await this.db.query(query);
 
-  }
+    }
 
     async deleteExpiredOtps() {
 
-    const query = `
+        const query = `
     DELETE FROM otp_login
     WHERE expires_at < NOW()
   `;
 
-    await this.db.query(query);
-    
-  }
+        await this.db.query(query);
+
+    }
 
     async getCompanyname(companyid: number) {
 
@@ -224,7 +227,7 @@ export class AuthRepository {
                 item.module,
                 item.prefix,
                 item.year,
-                item.document_no?.trim()||null,
+                item.document_no?.trim() || null,
             ]);
 
             const sql = `
@@ -287,7 +290,7 @@ export class AuthRepository {
                 company_email: data.company_email,
                 company_mobile: data.company_mobile,
                 default_interest: data.default_interest,
-                address:data.comp_address_line1,
+                address: data.comp_address_line1,
             };
 
             Object.entries(companyFields).forEach(([key, value]) => {
@@ -314,7 +317,7 @@ export class AuthRepository {
         }
     }
 
-    
+
     async updateCustomer(customerId: number, data: any, userId: number, conn?: any) {
         const db = conn ?? this.db;
 
@@ -330,10 +333,10 @@ export class AuthRepository {
                 address_line2: data.address_line2,
                 state: data.state,
                 city: data.city,
-                pincode: data.pincode?.trim()||null,
+                pincode: data.pincode?.trim() || null,
                 cust_phone: data.cust_phone,
-                cust_email: data.cust_email?.trim()||null,
-                user_name: data.user_name?.trim()||null,
+                cust_email: data.cust_email?.trim() || null,
+                user_name: data.user_name?.trim() || null,
             };
 
             Object.entries(customerFields).forEach(([key, value]) => {
@@ -433,7 +436,7 @@ export class AuthRepository {
             const company_mobile = data.company_mobile || null;
             const company_name = data.company_name || null;
             const default_interest = data.default_interest || null;
-            const address=data.comp_address_line1||null;
+            const address = data.comp_address_line1 || null;
 
 
             const created_date = DateTime.now()
@@ -476,7 +479,6 @@ export class AuthRepository {
         }
     }
 
-
     // Insert Customer (Manual Query)
     async insertCustomer(
         data: any,
@@ -487,6 +489,7 @@ export class AuthRepository {
         const db = conn ?? this.db;
 
         try {
+
             const cust_password = data.cust_password
                 ? await bcrypt.hash(data.cust_password, 10)
                 : null;
@@ -512,10 +515,11 @@ export class AuthRepository {
                 cust_password,
                 user_name,
                 cust_phone,
+                cust_email,
                 created_by,
                 created_date
             )
-            VALUES (?, ?, ?, ?, ?,?,?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?,?,?, ?, ?, ?, ?, ?, ?,?, ?, ?)
             `,
                 [
                     company_id,
@@ -531,18 +535,26 @@ export class AuthRepository {
                     cust_password,
                     data.user_name,
                     data.cust_phone || null,
+                    data.cust_email?.trim() || null,
                     userId,
                     created_date
                 ]
             );
 
             return result;
-        } catch (error) {
+
+        }
+
+        catch (error) {
+
             Sentry.captureException(error);
 
             console.error("insertCustomer error", error);
+
             throw error;
+
         }
+
     }
 
 
@@ -557,11 +569,35 @@ export class AuthRepository {
         co.company_email,
         co.company_mobile,
         co.address,
-        co.default_interest
+        co.default_interest,
+
+         -- total clients created
+    COUNT(DISTINCT cl.cl_id) AS total_clients,
+
+    -- total loans
+    COUNT(l.loan_id) AS total_loans,
+
+    -- active loans only
+    COUNT(
+        CASE 
+            WHEN l.loan_status = 'active' 
+            THEN 1 
+        END
+    ) AS active_loans
+
       FROM customers cu
       JOIN company co ON cu.comp_id = co.company_id
+
       LEFT JOIN ab_states st ON  cu.state=st.state_id
+      
+LEFT JOIN clients cl 
+    ON cl.created_by = cu.customer_id
+
+    LEFT JOIN loans l 
+    ON l.client_id = cl.cl_id
+
       WHERE cu.customer_id = ?
+      GROUP BY cu.customer_id
       LIMIT 1
       `,
             [customerId],
@@ -587,7 +623,7 @@ export class AuthRepository {
         return rows;
     }
 
-   
+
 
     async loginemail(login_id: string): Promise<LoginUserType | null> {
 
@@ -643,8 +679,10 @@ export class AuthRepository {
 
         }
         catch (error) {
+
             console.error("findemail error is", error)
             throw error;
+
         }
     }
 

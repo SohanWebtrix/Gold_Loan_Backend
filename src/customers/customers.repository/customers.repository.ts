@@ -377,12 +377,7 @@ GROUP BY c.customer_id;`, [customerId])
             });
 
             const sql = `
-                  SELECT count(*)as total,
-                ct.city_name AS city_name,
-                st.state_name AS state_name,
-                cm.company_name as company_name,
-                cm.company_mobile as company_mobile,
-                cm.company_email as company_email
+                  SELECT count(*)as total
               FROM customers cs
               LEFT JOIN ab_cities ct ON cs.city = ct.city_id
               LEFT JOIN ab_states st ON cs.state = st.state_id

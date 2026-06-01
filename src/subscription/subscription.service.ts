@@ -69,6 +69,8 @@ export class SubscriptionService {
         data
       }
     } catch (error) {
+            Sentry.captureException(error);
+
       console.error("Search Client error", error)
       throw new InternalServerErrorException("Failed to get updated data",);
     }
@@ -121,6 +123,8 @@ export class SubscriptionService {
           : null,
       };
     } catch (error) {
+            Sentry.captureException(error);
+
       throw error;
     }
   }

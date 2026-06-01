@@ -199,7 +199,8 @@ export class LedureRepository {
               SELECT le.*,
                 CONCAT(c1.first_name, ' ', c1.last_name) AS client_name,
                 l.loan_document_number AS loan_no,
-                ac.account_type AS account_name
+                ac.account_type AS account_name,
+                ac.bank_name AS bank_name
               FROM ledger_entries le
               LEFT JOIN clients c1 ON le.client_id = c1.cl_id
               LEFT JOIN bank_account ac ON le.account_id = ac.id
