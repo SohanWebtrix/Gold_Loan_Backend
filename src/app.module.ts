@@ -19,6 +19,7 @@ import { LedureModule } from './ledure/ledure.module';
 import { AdminModule } from './admin/admin.module';
 import { SettingModule } from './setting/setting.module';
 import { SubscriptionModule } from './subscription/subscription.module';
+import { HealthController } from './health/health.controller';
 
 
 @Module({
@@ -44,7 +45,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
     SettingModule,
     SubscriptionModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, HealthController],
   providers: [AppService],
 })
 export class AppModule { }
